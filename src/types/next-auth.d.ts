@@ -1,14 +1,4 @@
-import 'next-auth'
+// Type declarations for auth module
+// Placeholder - next-auth removed for Cloudflare Pages edge compatibility
 
-declare module 'next-auth' {
-  interface Session {
-    user: {
-      id: string
-      email: string
-      name: string
-      image?: string
-      quota?: number
-      used?: number
-    }
-  }
-}
+export {};
