@@ -9,7 +9,10 @@ const nextConfig = {
     ],
     unoptimized: true,
   },
-  // 移除 static export 以支持 API routes
+  // Cloudflare Pages 支持
+  experimental: {
+    runtime: 'edge',
+  },
 };
 
 export default nextConfig;
