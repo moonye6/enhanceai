@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import Image from 'next/image';
-import { checkRateLimit, incrementUsage, getUsageInfo, RateLimitResult } from '@/lib/rateLimit';
+import { checkRateLimit, incrementUsage, RateLimitResult } from '@/lib/rateLimit';
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -14,12 +14,35 @@ export default function Home() {
   const [errorCode, setErrorCode] = useState('');
   const [rateLimit, setRateLimit] = useState<RateLimitResult | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [user, setUser] = useState<{ email: string; name: string } | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
+  // Check auth status on mount
+  useEffect(() => {
+    fetch('/api/auth/session')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.user) {
+          setUser(data.user);
+        }
+      })
+      .finally(() => setLoadingAuth(false));
+  }, []);
 
   // Check rate limit on mount
   useEffect(() => {
     const limit = checkRateLimit();
     setRateLimit(limit);
   }, []);
+
+  const handleLogin = () => {
+    window.location.href = '/api/auth/signin/google';
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/signout', { method: 'POST' });
+    setUser(null);
+  };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -47,7 +70,6 @@ export default function Home() {
   const handleEnhance = async () => {
     if (!file) return;
 
-    // Check rate limit before calling API
     const currentLimit = checkRateLimit();
     if (!currentLimit.allowed) {
       setRateLimit(currentLimit);
@@ -65,7 +87,6 @@ export default function Home() {
       const formData = new FormData();
       formData.append('image', file);
 
-      // Simulate progress
       const progressInterval = setInterval(() => {
         setProgress(prev => Math.min(prev + 10, 90));
       }, 500);
@@ -84,22 +105,17 @@ export default function Home() {
         setError(data.error || 'Enhancement failed');
         setErrorCode(data.code || 'UNKNOWN_ERROR');
         
-        // Handle rate limit exceeded
         if (data.code === 'RATE_LIMIT_EXCEEDED') {
           setRateLimit({ ...rateLimit!, allowed: false, remaining: 0, resetAt: data.resetAt });
           setShowUpgradeModal(true);
         }
       } else {
         setResult(data.enhancedUrl);
-        
-        // Update rate limit
-        if (data.remaining !== undefined) {
-          const newLimit = incrementUsage();
-          setRateLimit(newLimit);
-        }
+        const newLimit = incrementUsage();
+        setRateLimit(newLimit);
       }
     } catch (err) {
-      setError('Network error. Please check your connection and try again.');
+      setError('Network error. Please check your connection.');
       setErrorCode('NETWORK_ERROR');
     } finally {
       setLoading(false);
@@ -113,8 +129,6 @@ export default function Home() {
     setError('');
     setErrorCode('');
     setProgress(0);
-    
-    // Refresh rate limit
     const limit = checkRateLimit();
     setRateLimit(limit);
   };
@@ -129,10 +143,17 @@ export default function Home() {
       case 'RATE_LIMIT_EXCEEDED': return '🚫';
       case 'FILE_TOO_LARGE': return '📦';
       case 'INVALID_FILE_TYPE': return '🖼️';
-      case 'SERVICE_BUSY': return '⏳';
       default: return '❌';
     }
   };
+
+  if (loadingAuth) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex items-center justify-center">
+        <div className="text-white text-xl">加载中...</div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
@@ -146,21 +167,36 @@ export default function Home() {
             <p className="text-slate-400 text-sm">一键 AI 图片增强</p>
           </div>
           
-          {/* Usage indicator */}
-          {rateLimit && (
-            <div className="text-right">
-              <p className="text-sm text-slate-400">
-                今日剩余: <span className={`font-semibold ${rateLimit.remaining > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {rateLimit.remaining}/{rateLimit.total}
-                </span>
-              </p>
-              {rateLimit.remaining === 0 && (
-                <p className="text-xs text-slate-500">
-                  {rateLimit.resetAt && `重置于 ${formatResetTime(rateLimit.resetAt)}`}
+          <div className="flex items-center gap-4">
+            {rateLimit && (
+              <div className="text-right">
+                <p className="text-sm text-slate-400">
+                  今日剩余: <span className={`font-semibold ${rateLimit.remaining > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {rateLimit.remaining}/{rateLimit.total}
+                  </span>
                 </p>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+            
+            {user ? (
+              <div className="flex items-center gap-3">
+                <span className="text-slate-300 text-sm">{user.name}</span>
+                <button
+                  onClick={handleLogout}
+                  className="text-slate-400 hover:text-white text-sm"
+                >
+                  登出
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleLogin}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium"
+              >
+                Google 登录
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -313,47 +349,12 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="max-w-4xl mx-auto px-4 py-16">
-        <h3 className="text-2xl font-bold text-white text-center mb-12">定价</h3>
-        <div className="grid md:grid-cols-3 gap-6">
-          {[
-            { name: 'Free', price: '$0', features: ['3 次/天', '最大 2x', '基础增强'], popular: false },
-            { name: 'Pro', price: '$4.9', period: '/月', features: ['100 次/天', '最大 8x', '批量处理', '老照片修复'], popular: true },
-            { name: 'Lifetime', price: '$49', features: ['永久 Pro', '一次付费', '优先支持'], popular: false },
-          ].map((plan, i) => (
-            <div 
-              key={i} 
-              className={`rounded-xl p-6 ${plan.popular ? 'bg-blue-600 ring-2 ring-blue-400' : 'bg-slate-800'}`}
-            >
-              {plan.popular && <p className="text-blue-200 text-sm font-semibold mb-2">最受欢迎</p>}
-              <h4 className="text-xl font-bold text-white">{plan.name}</h4>
-              <p className="text-3xl font-bold text-white my-4">
-                {plan.price}<span className="text-lg text-slate-300">{plan.period || ''}</span>
-              </p>
-              <ul className="space-y-2">
-                {plan.features.map((f, j) => (
-                  <li key={j} className="text-slate-300">✓ {f}</li>
-                ))}
-              </ul>
-              <button 
-                className={`w-full mt-6 py-2 rounded-lg font-semibold ${plan.popular ? 'bg-white text-blue-600' : 'bg-slate-600 text-white'}`}
-              >
-                开始使用
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* Upgrade Modal */}
       {showUpgradeModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 rounded-2xl p-8 max-w-md w-full">
             <h3 className="text-2xl font-bold text-white mb-4">🚀 升级到 Pro</h3>
-            <p className="text-slate-300 mb-6">
-              今日免费次数已用完。升级 Pro 解锁：
-            </p>
+            <p className="text-slate-300 mb-6">今日免费次数已用完。升级 Pro 解锁：</p>
             <ul className="space-y-3 mb-6">
               {['100 次/天增强', '最高 8x 放大', '批量处理', '老照片修复'].map((f, i) => (
                 <li key={i} className="text-slate-300 flex items-center gap-2">
@@ -373,10 +374,7 @@ export default function Home() {
               </button>
               <button
                 className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl"
-                onClick={() => {
-                  // TODO: Integrate with payment provider
-                  alert('支付功能即将上线，敬请期待！');
-                }}
+                onClick={() => alert('支付功能即将上线！')}
               >
                 立即升级
               </button>
@@ -389,9 +387,6 @@ export default function Home() {
       <footer className="border-t border-slate-700 py-8">
         <div className="max-w-6xl mx-auto px-4 text-center text-slate-400 text-sm">
           <p>© 2026 EnhanceAI. All rights reserved.</p>
-          <p className="mt-2">
-            Powered by <span className="text-blue-400">Real-ESRGAN</span> via fal.ai
-          </p>
         </div>
       </footer>
     </main>

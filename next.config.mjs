@@ -9,10 +9,6 @@ const nextConfig = {
     ],
     unoptimized: true,
   },
-  // Cloudflare Pages 支持
-  experimental: {
-    runtime: 'edge',
-  },
 };
 
 export default nextConfig;
