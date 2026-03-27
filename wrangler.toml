@@ -1,0 +1,24 @@
+# Cloudflare Pages Configuration
+# For use with wrangler CLI or Cloudflare Dashboard
+
+name = "enhanceai"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Pages configuration
+pages_build_output_dir = ".vercel/output/static"
+
+# Environment variables (set these in Cloudflare Dashboard)
+# [vars]
+# FAL_AI_API_KEY = ""
+
+# KV namespace for rate limiting (optional, for production)
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# id = "your-kv-namespace-id"
+
+# Redirects
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
