@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SessionProvider } from "@/components/SessionProvider";
 
 export const metadata: Metadata = {
-  title: "EnhanceAI - 一键 AI 图片增强",
-  description: "让每张照片都高清，仅需 $4.9/月",
+  title: "EnhanceAI - AI Image Enhancement",
+  description: "Upscale, denoise & sharpen your images with AI",
   keywords: ["ai photo enhancer", "image upscaler", "ai image enhancer"],
 };
 
@@ -13,8 +14,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
-      <body>{children}</body>
+    <html lang="en">
+      <body>
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   );
 }
