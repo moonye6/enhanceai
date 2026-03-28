@@ -50,7 +50,7 @@ export default function Home() {
           body: JSON.stringify({
             paypalOrderId,
             packageId: paymentLoadingRef.current ?? 'monthly',
-            userId: session?.user?.id ?? '',
+            userId: session?.user?.id || 'anonymous',
           }),
         });
 
@@ -204,7 +204,26 @@ export default function Home() {
     setErrorCode('');
   };
 
-  // Show loading state while checking session
+  // Login wall - require authentication
+  if (status === 'unauthenticated' || (status === 'loading' && !session)) {
+    return (
+      <main className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="text-6xl mb-6">✨</div>
+          <h1 className="text-4xl font-bold text-white mb-4">EnhanceAI</h1>
+          <p className="text-slate-400 mb-8">Upscale, denoise & sharpen your images with AI</p>
+          <button
+            onClick={() => signIn('google')}
+            className="w-full py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition text-lg"
+          >
+            Sign in with Google
+          </button>
+          <p className="text-slate-500 text-sm mt-4">Free: 3 enhancements/day • Pro: 100/day</p>
+        </div>
+      </main>
+    );
+  }
+
   if (status === 'loading') {
     return (
       <main className="min-h-screen bg-slate-900 flex items-center justify-center">
