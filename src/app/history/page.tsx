@@ -1,3 +1,6 @@
+export const runtime = 'edge'
+export const dynamic = 'force-dynamic'
+
 import { auth } from "@/auth"
 import Link from "next/link"
 
