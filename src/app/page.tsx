@@ -1,20 +1,25 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useSession, signIn, signOut } from 'next-auth/react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { checkRateLimit, incrementUsage, RateLimitResult } from '@/lib/rateLimit';
 
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  image?: string;
+}
+
 export default function Home() {
-  const { data: session, status } = useSession();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
   const [result, setResult] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
-  const [errorCode, setErrorCode] = useState('');
   const [rateLimit, setRateLimit] = useState<RateLimitResult | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState<'monthly' | 'lifetime' | null>(null);
@@ -24,23 +29,34 @@ export default function Home() {
   const popupRef = useRef<Window | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Check rate limit on mount
+  // Check auth status on mount
   useEffect(() => {
-    const limit = checkRateLimit(isPro);
-    setRateLimit(limit);
-  }, [isPro]);
+    fetch('/api/auth/session')
+      .then(res => res.json())
+      .then(data => {
+        setUser(data.user || null)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
 
-  // Listen for PayPal popup postMessage
+  // Check rate limit
+  useEffect(() => {
+    const limit = checkRateLimit(isPro)
+    setRateLimit(limit)
+  }, [isPro])
+
+  // PayPal callback
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type !== 'PAYPAL_SUCCESS') return;
+      if (event.origin !== window.location.origin) return
+      if (event.data?.type !== 'PAYPAL_SUCCESS') return
 
-      const { paypalOrderId } = event.data as { paypalOrderId: string };
+      const { paypalOrderId } = event.data as { paypalOrderId: string }
 
       if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
+        clearInterval(pollTimerRef.current)
+        pollTimerRef.current = null
       }
 
       try {
@@ -50,162 +66,174 @@ export default function Home() {
           body: JSON.stringify({
             paypalOrderId,
             packageId: paymentLoadingRef.current ?? 'monthly',
-            userId: session?.user?.id || 'anonymous',
+            userId: user?.id || 'anonymous',
           }),
-        });
+        })
 
         if (captureRes.ok) {
-          setIsPro(true);
-          setShowUpgradeModal(false);
-          setPaymentLoading(null);
-          setPaymentSuccess(true);
-          setTimeout(() => setPaymentSuccess(false), 3000);
+          setIsPro(true)
+          setShowUpgradeModal(false)
+          setPaymentLoading(null)
+          setPaymentSuccess(true)
+          setTimeout(() => setPaymentSuccess(false), 3000)
         } else {
-          const data = (await captureRes.json()) as { error?: string };
-          setPaymentError(data.error ?? 'Payment confirmation failed');
-          setPaymentLoading(null);
+          const data = await captureRes.json()
+          setPaymentError(data.error ?? 'Payment confirmation failed')
+          setPaymentLoading(null)
         }
       } catch {
-        setPaymentError('Network error, please try again');
-        setPaymentLoading(null);
+        setPaymentError('Network error, please try again')
+        setPaymentLoading(null)
       }
-    };
+    }
 
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [session]);
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [user])
 
-  const paymentLoadingRef = useRef<'monthly' | 'lifetime' | null>(null);
+  const paymentLoadingRef = useRef<'monthly' | 'lifetime' | null>(null)
   useEffect(() => {
-    paymentLoadingRef.current = paymentLoading;
-  }, [paymentLoading]);
+    paymentLoadingRef.current = paymentLoading
+  }, [paymentLoading])
+
+  const handleLogin = () => {
+    window.location.href = '/api/auth/callback'
+  }
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/signout', { method: 'POST' })
+    setUser(null)
+  }
 
   const handleUpgrade = async (packageId: 'monthly' | 'lifetime') => {
-    setPaymentError('');
-    setPaymentLoading(packageId);
+    setPaymentError('')
+    setPaymentLoading(packageId)
 
     try {
       const res = await fetch('/api/payment/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ packageId }),
-      });
+      })
 
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        setPaymentError(data.error ?? 'Failed to create order');
-        setPaymentLoading(null);
-        return;
+        const data = await res.json()
+        setPaymentError(data.error ?? 'Failed to create order')
+        setPaymentLoading(null)
+        return
       }
 
-      const { checkoutUrl } = (await res.json()) as { checkoutUrl: string };
+      const { checkoutUrl } = await res.json()
 
       const popup = window.open(
         checkoutUrl,
         'PayPalCheckout',
         'width=520,height=700,scrollbars=yes,resizable=yes',
-      );
-      popupRef.current = popup;
+      )
+      popupRef.current = popup
 
       if (!popup) {
-        setPaymentError('Popup blocked, please allow popups');
-        setPaymentLoading(null);
-        return;
+        setPaymentError('Popup blocked, please allow popups')
+        setPaymentLoading(null)
+        return
       }
 
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
       pollTimerRef.current = setInterval(() => {
         if (popup.closed) {
-          clearInterval(pollTimerRef.current!);
-          pollTimerRef.current = null;
-          setPaymentLoading(null);
+          clearInterval(pollTimerRef.current!)
+          pollTimerRef.current = null
+          setPaymentLoading(null)
         }
-      }, 500);
+      }, 500)
     } catch {
-      setPaymentError('Network error, please try again');
-      setPaymentLoading(null);
+      setPaymentError('Network error, please try again')
+      setPaymentLoading(null)
     }
-  };
+  }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const droppedFile = e.dataTransfer.files[0];
+    e.preventDefault()
+    const droppedFile = e.dataTransfer.files[0]
     if (droppedFile && droppedFile.type.startsWith('image/')) {
-      setFile(droppedFile);
-      setPreview(URL.createObjectURL(droppedFile));
-      setResult('');
-      setError('');
-      setErrorCode('');
+      setFile(droppedFile)
+      setPreview(URL.createObjectURL(droppedFile))
+      setResult('')
+      setError('')
     }
-  }, []);
+  }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-  }, []);
+    e.preventDefault()
+  }, [])
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
+    const selectedFile = e.target.files?.[0]
     if (selectedFile && selectedFile.type.startsWith('image/')) {
-      setFile(selectedFile);
-      setPreview(URL.createObjectURL(selectedFile));
-      setResult('');
-      setError('');
-      setErrorCode('');
+      setFile(selectedFile)
+      setPreview(URL.createObjectURL(selectedFile))
+      setResult('')
+      setError('')
     }
-  }, []);
+  }, [])
 
   const handleEnhance = async () => {
-    if (!file) return;
+    if (!file) return
 
-    setLoading(true);
-    setProgress(10);
-    setError('');
-    setErrorCode('');
+    setEnhancing(true)
+    setProgress(10)
+    setError('')
 
     try {
-      setProgress(30);
-      const formData = new FormData();
-      formData.append('image', file);
+      setProgress(30)
+      const formData = new FormData()
+      formData.append('image', file)
+      formData.append('userId', user?.id || 'anonymous')
 
-      setProgress(50);
+      setProgress(50)
       const response = await fetch('/api/enhance', {
         method: 'POST',
         body: formData,
-      });
+      })
 
-      setProgress(80);
-      const data = await response.json();
+      setProgress(80)
+      const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || 'Enhancement failed');
-        setErrorCode(data.code || 'UNKNOWN_ERROR');
+        setError(data.error || 'Enhancement failed')
         if (data.code === 'RATE_LIMIT_EXCEEDED') {
-          setShowUpgradeModal(true);
+          setShowUpgradeModal(true)
         }
       } else {
-        setResult(data.enhancedUrl);
-        const newLimit = incrementUsage(isPro);
-        setRateLimit(newLimit);
+        setResult(data.enhancedUrl)
+        const newLimit = incrementUsage(isPro)
+        setRateLimit(newLimit)
       }
-    } catch (err) {
-      setError('Network error, please try again');
-      setErrorCode('NETWORK_ERROR');
+    } catch {
+      setError('Network error, please try again')
     } finally {
-      setLoading(false);
-      setProgress(100);
+      setEnhancing(false)
+      setProgress(100)
     }
-  };
+  }
 
   const handleReset = () => {
-    setFile(null);
-    setPreview('');
-    setResult('');
-    setError('');
-    setErrorCode('');
-  };
+    setFile(null)
+    setPreview('')
+    setResult('')
+    setError('')
+  }
 
-  // Login wall - require authentication
-  if (status === 'unauthenticated' || (status === 'loading' && !session)) {
+  // Login wall
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </main>
+    )
+  }
+
+  if (!user) {
     return (
       <main className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto px-4">
@@ -213,7 +241,7 @@ export default function Home() {
           <h1 className="text-4xl font-bold text-white mb-4">EnhanceAI</h1>
           <p className="text-slate-400 mb-8">Upscale, denoise & sharpen your images with AI</p>
           <button
-            onClick={() => signIn('google')}
+            onClick={handleLogin}
             className="w-full py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition text-lg"
           >
             Sign in with Google
@@ -221,15 +249,7 @@ export default function Home() {
           <p className="text-slate-500 text-sm mt-4">Free: 3 enhancements/day • Pro: 100/day</p>
         </div>
       </main>
-    );
-  }
-
-  if (status === 'loading') {
-    return (
-      <main className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </main>
-    );
+    )
   }
 
   return (
@@ -240,15 +260,9 @@ export default function Home() {
           <Link href="/" className="text-xl font-bold text-white">EnhanceAI</Link>
           <div className="flex gap-6 items-center">
             <Link href="/pricing" className="text-slate-300 hover:text-white transition">Pricing</Link>
-            {session ? (
-              <>
-                <Link href="/history" className="text-slate-300 hover:text-white transition">History</Link>
-                <span className="text-slate-300">{session.user?.name}</span>
-                <button onClick={() => signOut()} className="text-red-400 hover:text-red-300 transition">Sign out</button>
-              </>
-            ) : (
-              <button onClick={() => signIn('google')} className="bg-blue-600 px-4 py-2 rounded-lg text-white hover:bg-blue-700 transition">Sign in</button>
-            )}
+            <Link href="/history" className="text-slate-300 hover:text-white transition">History</Link>
+            <span className="text-slate-300">{user.name}</span>
+            <button onClick={handleLogout} className="text-red-400 hover:text-red-300 transition">Sign out</button>
           </div>
         </div>
       </nav>
@@ -293,24 +307,22 @@ export default function Home() {
               </div>
             ) : (
               <div className="flex flex-col md:flex-row gap-8 items-center justify-center">
-                {/* Original */}
                 <div className="text-center">
                   <p className="text-sm text-slate-400 mb-2">Original</p>
-                  <Image src={preview} alt="Original" width={200} height={200} className="rounded-lg" />
+                  <img src={preview} alt="Original" className="w-48 h-48 rounded-lg object-cover" />
                 </div>
 
                 {result && (
                   <>
                     <div className="text-4xl text-slate-500">→</div>
-                    {/* Enhanced */}
                     <div className="text-center">
                       <p className="text-sm text-slate-400 mb-2">Enhanced</p>
-                      <Image src={result} alt="Enhanced" width={200} height={200} className="rounded-lg" />
+                      <img src={result} alt="Enhanced" className="w-48 h-48 rounded-lg object-cover" />
                     </div>
                   </>
                 )}
 
-                {loading && (
+                {enhancing && (
                   <div className="text-center">
                     <p className="text-white">Enhancing... {progress}%</p>
                     <div className="w-48 h-2 bg-slate-700 rounded-full mt-2">
@@ -326,7 +338,7 @@ export default function Home() {
           {error && (
             <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6">
               <p className="text-red-200">{error}</p>
-              {errorCode === 'RATE_LIMIT_EXCEEDED' && (
+              {error.includes('limit') && (
                 <button onClick={() => setShowUpgradeModal(true)} className="mt-2 text-blue-400 hover:underline">
                   Upgrade to Pro for more →
                 </button>
@@ -335,12 +347,12 @@ export default function Home() {
           )}
 
           {/* Actions */}
-          {file && !result && !loading && (
+          {file && !result && !enhancing && (
             <div className="flex justify-center gap-4">
               <button
                 onClick={handleEnhance}
                 disabled={!rateLimit?.allowed}
-                className="px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
               >
                 ✨ Enhance Image {rateLimit && `(${rateLimit.remaining} left)`}
               </button>
@@ -371,21 +383,6 @@ export default function Home() {
               </button>
             </div>
           )}
-
-          {/* Features */}
-          <div className="mt-16 grid md:grid-cols-3 gap-8">
-            {[
-              { icon: '📤', title: 'Upload', desc: 'Drag & drop or click' },
-              { icon: '✨', title: 'AI Enhance', desc: '2x upscale, denoise, sharpen' },
-              { icon: '⬇️', title: 'Download', desc: 'Get your enhanced image' },
-            ].map((f, i) => (
-              <div key={i} className="bg-slate-800 rounded-2xl p-6 text-center">
-                <div className="text-4xl mb-4">{f.icon}</div>
-                <h3 className="text-lg font-semibold text-white mb-2">{f.title}</h3>
-                <p className="text-slate-400">{f.desc}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -448,5 +445,5 @@ export default function Home() {
         </div>
       )}
     </main>
-  );
+  )
 }

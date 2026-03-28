@@ -1,11 +1,9 @@
 export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
-import { auth } from "@/auth"
+import Link from 'next/link'
 
-export default async function PricingPage() {
-  const session = await auth()
-
+export default function PricingPage() {
   return (
     <main className="min-h-screen bg-slate-900 py-20 px-4">
       <h1 className="text-4xl font-bold text-white text-center mb-12">Choose Your Plan</h1>
@@ -34,11 +32,7 @@ export default async function PricingPage() {
             <li>✓ Batch processing</li>
             <li>✓ Priority support</li>
           </ul>
-          {session ? (
-            <a href="/?upgrade=monthly" className="block w-full py-3 rounded-lg bg-blue-600 text-white text-center font-semibold hover:bg-blue-700 transition">Get Pro Monthly →</a>
-          ) : (
-            <a href="/api/auth/signin" className="block w-full py-3 rounded-lg bg-blue-600 text-white text-center font-semibold hover:bg-blue-700 transition">Sign in to upgrade</a>
-          )}
+          <a href="/?upgrade=monthly" className="block w-full py-3 rounded-lg bg-blue-600 text-white text-center font-semibold hover:bg-blue-700 transition">Get Pro Monthly →</a>
         </div>
 
         {/* Pro Lifetime */}
@@ -52,17 +46,17 @@ export default async function PricingPage() {
             <li>✓ Priority support</li>
             <li>✓ Lifetime access</li>
           </ul>
-          {session ? (
-            <a href="/?upgrade=lifetime" className="block w-full py-3 rounded-lg bg-green-600 text-white text-center font-semibold hover:bg-green-700 transition">Get Lifetime →</a>
-          ) : (
-            <a href="/api/auth/signin" className="block w-full py-3 rounded-lg bg-green-600 text-white text-center font-semibold hover:bg-green-700 transition">Sign in to upgrade</a>
-          )}
+          <a href="/?upgrade=lifetime" className="block w-full py-3 rounded-lg bg-green-600 text-white text-center font-semibold hover:bg-green-700 transition">Get Lifetime →</a>
         </div>
       </div>
 
       <p className="text-center text-slate-400 mt-12">
         All plans include secure payment via PayPal. Cancel anytime.
       </p>
+
+      <div className="text-center mt-8">
+        <Link href="/" className="text-blue-400 hover:text-blue-300">← Back to enhancer</Link>
+      </div>
     </main>
   )
 }
