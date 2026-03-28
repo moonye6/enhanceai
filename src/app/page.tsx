@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { checkRateLimit, incrementUsage, RateLimitResult } from '@/lib/rateLimit';
 
@@ -16,6 +16,11 @@ export default function Home() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [user, setUser] = useState<{ email: string; name: string } | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [paymentLoading, setPaymentLoading] = useState<'monthly' | 'lifetime' | null>(null);
+  const [paymentError, setPaymentError] = useState('');
+  const [isPro, setIsPro] = useState(false);
+  const popupRef = useRef<Window | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Check auth status on mount
   useEffect(() => {
@@ -35,6 +40,75 @@ export default function Home() {
     setRateLimit(limit);
   }, []);
 
+  // Listen for PayPal popup postMessage
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== 'PAYPAL_SUCCESS') return;
+
+      const { paypalOrderId } = event.data as { paypalOrderId: string };
+
+      // 清理轮询定时器
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+
+      // 读取当前选择的 packageId（存在 closure 中）
+      // 通过 capture route 完成支付
+      try {
+        const captureRes = await fetch('/api/payment/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paypalOrderId,
+            // packageId 通过 userId cookie 匹配，这里传 monthly 作为默认
+            // webhook 会以 reference_id 为准；capture 以 UI 传参为准
+            packageId: paymentLoadingRef.current ?? 'monthly',
+            userId: userIdRef.current,
+          }),
+        });
+
+        if (captureRes.ok) {
+          setIsPro(true);
+          setShowUpgradeModal(false);
+          setPaymentLoading(null);
+          alert('🎉 升级成功！您现在是 Pro 用户。');
+        } else {
+          const data = (await captureRes.json()) as { error?: string };
+          setPaymentError(data.error ?? '支付确认失败，请联系支持');
+          setPaymentLoading(null);
+        }
+      } catch {
+        setPaymentError('网络错误，请稍后重试');
+        setPaymentLoading(null);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refs to track latest values inside event listeners
+  const paymentLoadingRef = useRef<'monthly' | 'lifetime' | null>(null);
+  const userIdRef = useRef<string>('');
+
+  useEffect(() => {
+    paymentLoadingRef.current = paymentLoading;
+  }, [paymentLoading]);
+
+  // Extract userId from cookie for capture request
+  useEffect(() => {
+    const match = document.cookie
+      .split(';')
+      .map(c => c.trim())
+      .find(c => c.startsWith('enhanceai_uid='));
+    if (match) {
+      userIdRef.current = decodeURIComponent(match.split('=')[1]);
+    }
+  }, []);
+
   const handleLogin = () => {
     window.location.href = '/api/auth/signin/google';
   };
@@ -42,6 +116,55 @@ export default function Home() {
   const handleLogout = async () => {
     await fetch('/api/auth/signout', { method: 'POST' });
     setUser(null);
+  };
+
+  const handleUpgrade = async (packageId: 'monthly' | 'lifetime') => {
+    setPaymentError('');
+    setPaymentLoading(packageId);
+
+    try {
+      const res = await fetch('/api/payment/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageId }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setPaymentError(data.error ?? '创建订单失败');
+        setPaymentLoading(null);
+        return;
+      }
+
+      const { checkoutUrl } = (await res.json()) as { checkoutUrl: string; paypalOrderId: string };
+
+      // 弹框打开 PayPal 支付页（不跳转当前页面）
+      const popup = window.open(
+        checkoutUrl,
+        'PayPalCheckout',
+        'width=520,height=700,scrollbars=yes,resizable=yes',
+      );
+      popupRef.current = popup;
+
+      if (!popup) {
+        setPaymentError('弹框被阻止，请允许弹窗后重试');
+        setPaymentLoading(null);
+        return;
+      }
+
+      // 轮询弹框关闭（兜底：用户直接关闭弹框未完成支付）
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      pollTimerRef.current = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(pollTimerRef.current!);
+          pollTimerRef.current = null;
+          setPaymentLoading(null);
+        }
+      }, 500);
+    } catch {
+      setPaymentError('网络错误，请稍后重试');
+      setPaymentLoading(null);
+    }
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -362,23 +485,62 @@ export default function Home() {
                 </li>
               ))}
             </ul>
-            <div className="bg-slate-700 rounded-lg p-4 mb-6">
-              <p className="text-3xl font-bold text-white">$4.9<span className="text-lg text-slate-400">/月</span></p>
+
+            {/* 定价方案 */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-slate-700 rounded-xl p-4 text-center border border-slate-600">
+                <p className="text-sm text-slate-400 mb-1">Monthly</p>
+                <p className="text-2xl font-bold text-white">$4.9</p>
+                <p className="text-xs text-slate-400">/月</p>
+              </div>
+              <div className="bg-blue-900/40 rounded-xl p-4 text-center border border-blue-500">
+                <p className="text-sm text-blue-300 mb-1">Lifetime ⭐</p>
+                <p className="text-2xl font-bold text-white">$49</p>
+                <p className="text-xs text-slate-400">永久有效</p>
+              </div>
             </div>
-            <div className="flex gap-3">
+
+            {/* 错误提示 */}
+            {paymentError && (
+              <div className="bg-red-900/30 border border-red-500 rounded-lg p-3 mb-4 text-red-300 text-sm">
+                {paymentError}
+              </div>
+            )}
+
+            {/* 操作按钮 */}
+            <div className="space-y-2 mb-3">
               <button
-                onClick={() => setShowUpgradeModal(false)}
-                className="flex-1 py-3 bg-slate-600 hover:bg-slate-500 text-white font-semibold rounded-xl"
+                onClick={() => handleUpgrade('monthly')}
+                disabled={paymentLoading !== null}
+                className="w-full py-3 bg-slate-600 hover:bg-slate-500 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                稍后再说
+                {paymentLoading === 'monthly' ? '⏳ 跳转中...' : '💳 Monthly - $4.9/月'}
               </button>
               <button
-                className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl"
-                onClick={() => alert('支付功能即将上线！')}
+                onClick={() => handleUpgrade('lifetime')}
+                disabled={paymentLoading !== null}
+                className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                立即升级
+                {paymentLoading === 'lifetime' ? '⏳ 跳转中...' : '⭐ Lifetime - $49 永久'}
               </button>
             </div>
+
+            <button
+              onClick={() => {
+                setShowUpgradeModal(false);
+                setPaymentError('');
+              }}
+              disabled={paymentLoading !== null}
+              className="w-full py-2 text-slate-400 hover:text-slate-300 text-sm transition-colors disabled:opacity-50"
+            >
+              稍后再说
+            </button>
+
+            {isPro && (
+              <p className="text-center text-green-400 mt-3 text-sm font-semibold">
+                ✅ 您已是 Pro 用户
+              </p>
+            )}
           </div>
         </div>
       )}

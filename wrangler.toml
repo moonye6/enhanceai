@@ -8,6 +8,14 @@ compatibility_flags = ["nodejs_compat"]
 # Pages configuration
 pages_build_output_dir = ".vercel/output/static"
 
+# KV Namespaces
+# Replace PLACEHOLDER_KV_ID and PLACEHOLDER_KV_PREVIEW_ID with real IDs from Cloudflare Dashboard
+# Dashboard → Workers & Pages → KV → Create namespace → copy namespace ID
+[[kv_namespaces]]
+binding = "ENHANCEAI_KV"
+id = "PLACEHOLDER_KV_ID"
+preview_id = "PLACEHOLDER_KV_PREVIEW_ID"
+
 # Environment variables (set these in Cloudflare Dashboard)
 # [vars]
 # FAL_AI_API_KEY = ""
