@@ -112,18 +112,13 @@ export async function createOrder(params: CreateOrderParams): Promise<PayPalOrde
         },
       },
     ],
-    payment_source: {
-      paypal: {
-        experience_context: {
-          payment_method_preference: 'IMMEDIATE_PAYMENT_REQUIRED',
-          brand_name: 'EnhanceAI',
-          landing_page: 'LOGIN',
-          // 关键：显示"立即支付"按钮而非"继续查看订单"
-          user_action: 'PAY_NOW',
-          return_url: `${siteUrl}/payment/callback`,
-          cancel_url: `${siteUrl}/payment/callback?cancelled=true`,
-        },
-      },
+    // application_context 兼容 live 环境（payment_source 在部分商户配置下返回 PAYER_ACTION_REQUIRED）
+    application_context: {
+      brand_name: 'EnhanceAI',
+      landing_page: 'LOGIN',
+      user_action: 'PAY_NOW',
+      return_url: `${siteUrl}/payment/callback`,
+      cancel_url: `${siteUrl}/payment/callback?cancelled=true`,
     },
   };
 
