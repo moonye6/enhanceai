@@ -52,6 +52,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const responseBody = {
       checkoutUrl: approveLink.href,
       paypalOrderId: paypalOrder.id,
+      userId,
     };
 
     const res = NextResponse.json(responseBody, { status: 200 });

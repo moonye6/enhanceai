@@ -8,6 +8,7 @@ export interface RateLimitResult {
 }
 
 const FREE_TIER_LIMIT = 3; // 3 times per day
+const PRO_TIER_LIMIT = 100; // 100 times per day for Pro users
 const STORAGE_KEY = 'enhanceai_usage';
 
 interface UsageData {
@@ -19,13 +20,14 @@ function getToday(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-export function checkRateLimit(): RateLimitResult {
+export function checkRateLimit(isPro = false): RateLimitResult {
   if (typeof window === 'undefined') {
     return { allowed: true, remaining: FREE_TIER_LIMIT, total: FREE_TIER_LIMIT, resetAt: '' };
   }
 
   const stored = localStorage.getItem(STORAGE_KEY);
   const today = getToday();
+  const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
   
   let usage: UsageData;
   
@@ -39,26 +41,27 @@ export function checkRateLimit(): RateLimitResult {
     }
   }
 
-  const remaining = Math.max(0, FREE_TIER_LIMIT - usage.count);
+  const remaining = Math.max(0, limit - usage.count);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
 
   return {
-    allowed: usage.count < FREE_TIER_LIMIT,
+    allowed: usage.count < limit,
     remaining,
-    total: FREE_TIER_LIMIT,
+    total: limit,
     resetAt: tomorrow.toISOString(),
   };
 }
 
-export function incrementUsage(): RateLimitResult {
+export function incrementUsage(isPro = false): RateLimitResult {
   if (typeof window === 'undefined') {
     return { allowed: true, remaining: FREE_TIER_LIMIT, total: FREE_TIER_LIMIT, resetAt: '' };
   }
 
   const stored = localStorage.getItem(STORAGE_KEY);
   const today = getToday();
+  const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
   
   let usage: UsageData;
   
@@ -74,15 +77,15 @@ export function incrementUsage(): RateLimitResult {
   usage.count += 1;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(usage));
 
-  const remaining = Math.max(0, FREE_TIER_LIMIT - usage.count);
+  const remaining = Math.max(0, limit - usage.count);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
 
   return {
-    allowed: usage.count < FREE_TIER_LIMIT,
+    allowed: usage.count < limit,
     remaining,
-    total: FREE_TIER_LIMIT,
+    total: limit,
     resetAt: tomorrow.toISOString(),
   };
 }

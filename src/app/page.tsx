@@ -19,6 +19,7 @@ export default function Home() {
   const [paymentLoading, setPaymentLoading] = useState<'monthly' | 'lifetime' | null>(null);
   const [paymentError, setPaymentError] = useState('');
   const [isPro, setIsPro] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
   const popupRef = useRef<Window | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -36,9 +37,10 @@ export default function Home() {
 
   // Check rate limit on mount
   useEffect(() => {
-    const limit = checkRateLimit();
+    const limit = checkRateLimit(isPro);
     setRateLimit(limit);
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPro]);
 
   // Listen for PayPal popup postMessage
   useEffect(() => {
@@ -71,9 +73,13 @@ export default function Home() {
 
         if (captureRes.ok) {
           setIsPro(true);
-          setShowUpgradeModal(false);
+          setPaymentSuccess(true);
           setPaymentLoading(null);
-          alert('🎉 升级成功！您现在是 Pro 用户。');
+          // 1.5 秒后自动关闭弹窗
+          setTimeout(() => {
+            setPaymentSuccess(false);
+            setShowUpgradeModal(false);
+          }, 1500);
         } else {
           const data = (await captureRes.json()) as { error?: string };
           setPaymentError(data.error ?? '支付确认失败，请联系支持');
@@ -97,17 +103,6 @@ export default function Home() {
   useEffect(() => {
     paymentLoadingRef.current = paymentLoading;
   }, [paymentLoading]);
-
-  // Extract userId from cookie for capture request
-  useEffect(() => {
-    const match = document.cookie
-      .split(';')
-      .map(c => c.trim())
-      .find(c => c.startsWith('enhanceai_uid='));
-    if (match) {
-      userIdRef.current = decodeURIComponent(match.split('=')[1]);
-    }
-  }, []);
 
   const handleLogin = () => {
     window.location.href = '/api/auth/signin/google';
@@ -136,7 +131,10 @@ export default function Home() {
         return;
       }
 
-      const { checkoutUrl } = (await res.json()) as { checkoutUrl: string; paypalOrderId: string };
+      const { checkoutUrl, userId: newUserId } = (await res.json()) as { checkoutUrl: string; paypalOrderId: string; userId: string };
+
+      // 保存 userId 供 capture 请求使用
+      userIdRef.current = newUserId;
 
       // 弹框打开 PayPal 支付页（不跳转当前页面）
       const popup = window.open(
@@ -193,7 +191,7 @@ export default function Home() {
   const handleEnhance = async () => {
     if (!file) return;
 
-    const currentLimit = checkRateLimit();
+    const currentLimit = checkRateLimit(isPro);
     if (!currentLimit.allowed) {
       setRateLimit(currentLimit);
       setShowUpgradeModal(true);
@@ -234,7 +232,7 @@ export default function Home() {
         }
       } else {
         setResult(data.enhancedUrl);
-        const newLimit = incrementUsage();
+        const newLimit = incrementUsage(isPro);
         setRateLimit(newLimit);
       }
     } catch (err) {
@@ -252,7 +250,7 @@ export default function Home() {
     setError('');
     setErrorCode('');
     setProgress(0);
-    const limit = checkRateLimit();
+    const limit = checkRateLimit(isPro);
     setRateLimit(limit);
   };
 
@@ -476,70 +474,84 @@ export default function Home() {
       {showUpgradeModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 rounded-2xl p-8 max-w-md w-full">
-            <h3 className="text-2xl font-bold text-white mb-4">🚀 升级到 Pro</h3>
-            <p className="text-slate-300 mb-6">今日免费次数已用完。升级 Pro 解锁：</p>
-            <ul className="space-y-3 mb-6">
-              {['100 次/天增强', '最高 8x 放大', '批量处理', '老照片修复'].map((f, i) => (
-                <li key={i} className="text-slate-300 flex items-center gap-2">
-                  <span className="text-green-400">✓</span> {f}
-                </li>
-              ))}
-            </ul>
-
-            {/* 定价方案 */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-slate-700 rounded-xl p-4 text-center border border-slate-600">
-                <p className="text-sm text-slate-400 mb-1">Monthly</p>
-                <p className="text-2xl font-bold text-white">$4.9</p>
-                <p className="text-xs text-slate-400">/月</p>
+            {paymentSuccess ? (
+              /* 支付成功界面 */
+              <div className="text-center py-4">
+                <div className="text-6xl mb-4">🎉</div>
+                <h3 className="text-2xl font-bold text-green-400 mb-2">升级成功！</h3>
+                <p className="text-slate-300">您现在是 Pro 用户，享受 100 次/天增强。</p>
+                <div className="mt-4 bg-green-900/30 border border-green-500 rounded-lg p-3 text-green-300 text-sm">
+                  ✅ Pro 权益已激活，窗口即将关闭...
+                </div>
               </div>
-              <div className="bg-blue-900/40 rounded-xl p-4 text-center border border-blue-500">
-                <p className="text-sm text-blue-300 mb-1">Lifetime ⭐</p>
-                <p className="text-2xl font-bold text-white">$49</p>
-                <p className="text-xs text-slate-400">永久有效</p>
-              </div>
-            </div>
+            ) : (
+              <>
+                <h3 className="text-2xl font-bold text-white mb-4">🚀 升级到 Pro</h3>
+                <p className="text-slate-300 mb-6">今日免费次数已用完。升级 Pro 解锁：</p>
+                <ul className="space-y-3 mb-6">
+                  {['100 次/天增强', '最高 8x 放大', '批量处理', '老照片修复'].map((f, i) => (
+                    <li key={i} className="text-slate-300 flex items-center gap-2">
+                      <span className="text-green-400">✓</span> {f}
+                    </li>
+                  ))}
+                </ul>
 
-            {/* 错误提示 */}
-            {paymentError && (
-              <div className="bg-red-900/30 border border-red-500 rounded-lg p-3 mb-4 text-red-300 text-sm">
-                {paymentError}
-              </div>
-            )}
+                {/* 定价方案 */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-slate-700 rounded-xl p-4 text-center border border-slate-600">
+                    <p className="text-sm text-slate-400 mb-1">Monthly</p>
+                    <p className="text-2xl font-bold text-white">$4.9</p>
+                    <p className="text-xs text-slate-400">/月</p>
+                  </div>
+                  <div className="bg-blue-900/40 rounded-xl p-4 text-center border border-blue-500">
+                    <p className="text-sm text-blue-300 mb-1">Lifetime ⭐</p>
+                    <p className="text-2xl font-bold text-white">$49</p>
+                    <p className="text-xs text-slate-400">永久有效</p>
+                  </div>
+                </div>
 
-            {/* 操作按钮 */}
-            <div className="space-y-2 mb-3">
-              <button
-                onClick={() => handleUpgrade('monthly')}
-                disabled={paymentLoading !== null}
-                className="w-full py-3 bg-slate-600 hover:bg-slate-500 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {paymentLoading === 'monthly' ? '⏳ 跳转中...' : '💳 Monthly - $4.9/月'}
-              </button>
-              <button
-                onClick={() => handleUpgrade('lifetime')}
-                disabled={paymentLoading !== null}
-                className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {paymentLoading === 'lifetime' ? '⏳ 跳转中...' : '⭐ Lifetime - $49 永久'}
-              </button>
-            </div>
+                {/* 错误提示 */}
+                {paymentError && (
+                  <div className="bg-red-900/30 border border-red-500 rounded-lg p-3 mb-4 text-red-300 text-sm">
+                    {paymentError}
+                  </div>
+                )}
 
-            <button
-              onClick={() => {
-                setShowUpgradeModal(false);
-                setPaymentError('');
-              }}
-              disabled={paymentLoading !== null}
-              className="w-full py-2 text-slate-400 hover:text-slate-300 text-sm transition-colors disabled:opacity-50"
-            >
-              稍后再说
-            </button>
+                {/* 操作按钮 */}
+                <div className="space-y-2 mb-3">
+                  <button
+                    onClick={() => handleUpgrade('monthly')}
+                    disabled={paymentLoading !== null}
+                    className="w-full py-3 bg-slate-600 hover:bg-slate-500 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {paymentLoading === 'monthly' ? '⏳ 跳转中...' : '💳 Monthly - $4.9/月'}
+                  </button>
+                  <button
+                    onClick={() => handleUpgrade('lifetime')}
+                    disabled={paymentLoading !== null}
+                    className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {paymentLoading === 'lifetime' ? '⏳ 跳转中...' : '⭐ Lifetime - $49 永久'}
+                  </button>
+                </div>
 
-            {isPro && (
-              <p className="text-center text-green-400 mt-3 text-sm font-semibold">
-                ✅ 您已是 Pro 用户
-              </p>
+                <button
+                  onClick={() => {
+                    setShowUpgradeModal(false);
+                    setPaymentError('');
+                  }}
+                  disabled={paymentLoading !== null}
+                  className="w-full py-2 text-slate-400 hover:text-slate-300 text-sm transition-colors disabled:opacity-50"
+                >
+                  稍后再说
+                </button>
+
+                {isPro && (
+                  <p className="text-center text-green-400 mt-3 text-sm font-semibold">
+                    ✅ 您已是 Pro 用户
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
