@@ -490,6 +490,121 @@ export default function Home() {
         </div>
       </section>
 
+      {/* How It Works */}
+      <section className="px-4 pb-16">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-3xl font-bold text-white text-center mb-4">How It Works</h2>
+          <p className="text-slate-400 text-center mb-12 max-w-2xl mx-auto">Enhance your images in three simple steps — no design skills needed</p>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-slate-800/50 rounded-2xl p-6 text-center border border-slate-700/50 hover:border-blue-500/30 transition">
+              <div className="w-14 h-14 bg-blue-600/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">📤</span>
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">1. Upload</h3>
+              <p className="text-slate-400 text-sm">Drag & drop or click to upload your image. Supports JPG, PNG, and WebP up to 5MB.</p>
+            </div>
+            <div className="bg-slate-800/50 rounded-2xl p-6 text-center border border-slate-700/50 hover:border-blue-500/30 transition">
+              <div className="w-14 h-14 bg-purple-600/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">🤖</span>
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">2. AI Enhance</h3>
+              <p className="text-slate-400 text-sm">Our AuraSR AI model upscales your image to 4× resolution with incredible detail recovery.</p>
+            </div>
+            <div className="bg-slate-800/50 rounded-2xl p-6 text-center border border-slate-700/50 hover:border-blue-500/30 transition">
+              <div className="w-14 h-14 bg-green-600/20 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">⬇️</span>
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">3. Download</h3>
+              <p className="text-slate-400 text-sm">Get your enhanced image instantly. Download the compressed preview or full-resolution 4× version.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="px-4 pb-16">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-3xl font-bold text-white text-center mb-4">Why EnhanceAI?</h2>
+          <p className="text-slate-400 text-center mb-12 max-w-2xl mx-auto">Powered by cutting-edge AI, designed for everyone</p>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { icon: '⚡', title: '4× Super Resolution', desc: 'Upscale images to 4 times the original resolution with AI-powered detail reconstruction' },
+              { icon: '🎨', title: 'Detail Recovery', desc: 'Recover lost textures, edges and fine details that traditional upscalers miss' },
+              { icon: '🔒', title: 'Privacy First', desc: 'Images are processed and never stored permanently. Your data stays yours' },
+              { icon: '☁️', title: 'Cloud Powered', desc: 'Runs on edge servers worldwide for fast processing — no software to install' },
+            ].map((f, i) => (
+              <div key={i} className="bg-slate-800/30 rounded-xl p-5 border border-slate-700/30">
+                <div className="text-3xl mb-3">{f.icon}</div>
+                <h3 className="text-white font-semibold mb-2">{f.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Use Cases */}
+      <section className="px-4 pb-16">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-3xl font-bold text-white text-center mb-4">Perfect For</h2>
+          <p className="text-slate-400 text-center mb-12 max-w-2xl mx-auto">Whatever your use case, EnhanceAI delivers stunning results</p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              { icon: '📸', title: 'Photography', desc: 'Upscale old or low-res photos to print-quality resolution. Bring new life to treasured memories.' },
+              { icon: '🛍️', title: 'E-Commerce', desc: 'Make product images crystal clear for your online store. Higher quality images drive more sales.' },
+              { icon: '🎮', title: 'Digital Art & Gaming', desc: 'Enhance textures, concept art, and screenshots. Perfect for artists and content creators.' },
+            ].map((u, i) => (
+              <div key={i} className="bg-gradient-to-b from-slate-800/60 to-slate-800/30 rounded-2xl p-6 border border-slate-700/40">
+                <div className="text-4xl mb-4">{u.icon}</div>
+                <h3 className="text-lg font-semibold text-white mb-2">{u.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{u.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="px-4 pb-16">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-3xl font-bold text-white text-center mb-12">Frequently Asked Questions</h2>
+          <div className="space-y-4">
+            {[
+              { q: 'What is AI image enhancement?', a: 'AI image enhancement uses deep learning models to intelligently upscale images, recovering fine details, removing noise, and sharpening edges that traditional methods can\'t achieve.' },
+              { q: 'How much does it cost?', a: 'EnhanceAI offers 3 free enhancements per day. For heavy users, our Pro plan starts at $4.9/month with 100 enhancements per day and up to 8× upscaling.' },
+              { q: 'What image formats are supported?', a: 'We support JPEG, PNG, and WebP formats. Maximum file size is 5MB. The enhanced image is available in both compressed preview and full-resolution download.' },
+              { q: 'Is my data safe?', a: 'Absolutely. Images are processed in real-time on secure edge servers. We don\'t permanently store your original or enhanced images on our servers.' },
+              { q: 'How does the 4× upscaling work?', a: 'We use AuraSR v2, a state-of-the-art super-resolution AI model. It analyzes your image and generates new pixels with realistic details, effectively quadrupling the resolution (2× width and 2× height).' },
+            ].map((item, i) => (
+              <details key={i} className="group bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
+                <summary className="flex items-center justify-between p-5 cursor-pointer text-white font-medium hover:bg-slate-800/80 transition">
+                  {item.q}
+                  <span className="text-slate-400 group-open:rotate-45 transition-transform text-xl ml-4">+</span>
+                </summary>
+                <div className="px-5 pb-5 text-slate-400 text-sm leading-relaxed">
+                  {item.a}
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-800 px-4 py-12">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          <div>
+            <p className="text-white font-bold text-lg">EnhanceAI</p>
+            <p className="text-slate-500 text-sm mt-1">AI-powered image enhancement & super resolution</p>
+          </div>
+          <div className="flex gap-6 text-sm">
+            <Link href="/pricing" className="text-slate-400 hover:text-white transition">Pricing</Link>
+            <a href="mailto:support@enhanceai.online" className="text-slate-400 hover:text-white transition">Contact</a>
+          </div>
+          <p className="text-slate-600 text-xs">© {new Date().getFullYear()} EnhanceAI. All rights reserved.</p>
+        </div>
+      </footer>
+
       {/* Upgrade Modal */}
       {showUpgradeModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">

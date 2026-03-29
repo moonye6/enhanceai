@@ -1,14 +1,42 @@
+import type { Metadata } from 'next'
+
 export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Pricing — Free & Pro Plans',
+  description:
+    'Choose the right EnhanceAI plan. Start free with 3 AI image enhancements per day, or upgrade to Pro for 100/day with 8× upscaling and batch processing.',
+  alternates: {
+    canonical: '/pricing',
+  },
+  openGraph: {
+    title: 'EnhanceAI Pricing — Free & Pro Plans',
+    description:
+      'Start free with 3 AI image enhancements per day, or upgrade to Pro for 100/day.',
+  },
+}
 
 import Link from 'next/link'
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-slate-900 py-20 px-4">
-      <h1 className="text-4xl font-bold text-white text-center mb-12">Choose Your Plan</h1>
+    <main className="min-h-screen bg-slate-900">
+      {/* Navigation */}
+      <nav className="fixed top-0 w-full bg-slate-900/80 backdrop-blur-md z-50 border-b border-slate-800">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+          <Link href="/" className="text-xl font-bold text-white">EnhanceAI</Link>
+          <div className="flex gap-6 items-center">
+            <Link href="/pricing" className="text-white font-semibold">Pricing</Link>
+          </div>
+        </div>
+      </nav>
 
-      <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8">
+      <div className="pt-28 pb-20 px-4">
+        <h1 className="text-4xl font-bold text-white text-center mb-4">Choose Your Plan</h1>
+        <p className="text-slate-400 text-center mb-12 max-w-xl mx-auto">Start free, upgrade when you need more. All plans include AI-powered 4× super resolution.</p>
+
+        <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8">
         {/* Free */}
         <div className="bg-slate-800 rounded-2xl p-8">
           <h2 className="text-2xl font-bold text-white mb-2">Free</h2>
@@ -57,6 +85,23 @@ export default function PricingPage() {
       <div className="text-center mt-8">
         <Link href="/" className="text-blue-400 hover:text-blue-300">← Back to enhancer</Link>
       </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-800 px-4 py-12">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          <div>
+            <p className="text-white font-bold text-lg">EnhanceAI</p>
+            <p className="text-slate-500 text-sm mt-1">AI-powered image enhancement & super resolution</p>
+          </div>
+          <div className="flex gap-6 text-sm">
+            <Link href="/" className="text-slate-400 hover:text-white transition">Home</Link>
+            <Link href="/pricing" className="text-slate-400 hover:text-white transition">Pricing</Link>
+            <a href="mailto:support@enhanceai.online" className="text-slate-400 hover:text-white transition">Contact</a>
+          </div>
+          <p className="text-slate-600 text-xs">© {new Date().getFullYear()} EnhanceAI. All rights reserved.</p>
+        </div>
+      </footer>
     </main>
   )
 }
