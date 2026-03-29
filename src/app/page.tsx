@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { checkRateLimit, incrementUsage, RateLimitResult } from '@/lib/rateLimit';
+import { checkRateLimit, incrementUsage, syncFromServer, RateLimitResult } from '@/lib/rateLimit';
 
 interface User {
   id: string;
@@ -101,8 +101,13 @@ export default function Home() {
   }
 
   const handleLogout = async () => {
-    await fetch('/api/auth/signout', { method: 'POST' })
+    try {
+      await fetch('/api/auth/signout', { method: 'POST' })
+    } catch {
+      // 即使请求失败也清除本地状态
+    }
     setUser(null)
+    window.location.href = '/'
   }
 
   const handleUpgrade = async (packageId: 'monthly' | 'lifetime') => {
@@ -203,11 +208,21 @@ export default function Home() {
         setError(data.error || 'Enhancement failed')
         if (data.code === 'RATE_LIMIT_EXCEEDED') {
           setShowUpgradeModal(true)
+          // 同步服务端限流状态
+          if (typeof data.remaining === 'number') {
+            setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))
+          }
         }
       } else {
         setResult(data.enhancedUrl)
-        const newLimit = incrementUsage(isPro)
-        setRateLimit(newLimit)
+        // 用服务端返回的 remaining 值覆盖客户端计数（服务端为准）
+        if (typeof data.remaining === 'number') {
+          setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))
+        } else {
+          const newLimit = incrementUsage(isPro)
+          setRateLimit(newLimit)
+        }
+        if (data.isPro) setIsPro(true)
       }
     } catch {
       setError('Network error, please try again')

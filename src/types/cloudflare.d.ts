@@ -18,11 +18,18 @@ export interface CloudflareEnv {
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
+      // Google OAuth
+      GOOGLE_CLIENT_ID?: string;
+      GOOGLE_CLIENT_SECRET?: string;
+      // PayPal
       PAYPAL_CLIENT_ID?: string;
       PAYPAL_CLIENT_SECRET?: string;
       PAYPAL_WEBHOOK_ID?: string;
       PAYPAL_ENV?: 'sandbox' | 'live';
+      // Site
       NEXT_PUBLIC_SITE_URL?: string;
+      // AI service
+      FAL_AI_API_KEY?: string;
     }
   }
 }

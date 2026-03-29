@@ -2,9 +2,21 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import type { KVStore } from '@/lib/proStatus';
+
 const FAL_AI_ENDPOINT = 'https://fal.run/fal-ai/image-upscaling';
 const FREE_TIER_LIMIT = 3;
 const PRO_TIER_LIMIT = 100;
+
+interface ProRecord {
+  plan: 'monthly' | 'lifetime';
+  expiresAt: string | null;
+}
+
+interface EnhanceApiResult {
+  image?: { url: string };
+  images?: Array<{ url: string }>;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,20 +50,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Get KV and check rate limit
-    let kv: any = null;
+    let kv: KVStore | null = null;
     let isPro = false;
     let remaining = FREE_TIER_LIMIT;
 
     try {
       const { getRequestContext } = await import('@cloudflare/next-on-pages');
       const { env } = getRequestContext();
-      kv = (env as any).ENHANCEAI_KV;
+      kv = (env as Record<string, KVStore>)['ENHANCEAI_KV'] ?? null;
 
       if (kv && userId) {
         // Check Pro status
         const proRecord = await kv.get(`pro:${userId}`);
         if (proRecord) {
-          const proData = JSON.parse(proRecord);
+          const proData: ProRecord = JSON.parse(proRecord);
           if (proData.plan === 'lifetime' || (proData.expiresAt && new Date(proData.expiresAt) > new Date())) {
             isPro = true;
           }
@@ -91,7 +103,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         enhancedUrl: dataUrl,
         demo: true,
-        message: 'Demo mode - set FAL_AI_API_KEY for real enhancement',
+        message: 'Demo mode — set FAL_AI_API_KEY for real enhancement',
         remaining,
         isPro,
       });
@@ -111,14 +123,23 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
+      const errText = await response.text().catch(() => 'Unknown');
+      console.error('[enhance] fal.ai error:', response.status, errText);
       return NextResponse.json({
         error: 'Enhancement failed',
         code: 'ENHANCEMENT_FAILED',
       }, { status: 500 });
     }
 
-    const result = await response.json();
+    const result: EnhanceApiResult = await response.json();
     const enhancedUrl = result.image?.url || result.images?.[0]?.url;
+
+    if (!enhancedUrl) {
+      return NextResponse.json({
+        error: 'No enhanced image URL in response',
+        code: 'ENHANCEMENT_FAILED',
+      }, { status: 500 });
+    }
 
     // Increment usage and save history
     if (kv && userId) {
@@ -131,7 +152,7 @@ export async function POST(request: NextRequest) {
       // Save history
       const historyKey = `history:${userId}:${Date.now()}`;
       await kv.put(historyKey, JSON.stringify({
-        originalUrl: dataUrl.substring(0, 100) + '...',  // Truncate for storage
+        originalUrl: dataUrl.substring(0, 100) + '...',
         enhancedUrl,
         scale: 2,
         createdAt: new Date().toISOString(),
@@ -147,8 +168,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
+    console.error('[enhance] Internal error:', error);
     return NextResponse.json({
-      error: String(error),
+      error: 'Internal server error',
       code: 'INTERNAL_ERROR',
     }, { status: 500 });
   }
