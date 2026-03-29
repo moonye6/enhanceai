@@ -8,8 +8,10 @@ import type { KVStore } from '@/lib/proStatus';
 const FAL_AI_ENDPOINT = 'https://fal.run/fal-ai/aura-sr';
 const FREE_TIER_LIMIT = 3;
 const PRO_TIER_LIMIT = 100;
-// Max preview size ~900KB to stay under 1MB with overhead
-const MAX_PREVIEW_BYTES = 900 * 1024;
+// Max preview ~500KB to keep JSON response fast
+const MAX_PREVIEW_BYTES = 500 * 1024;
+// Max preview dimension (longest side) for fast rendering
+const MAX_PREVIEW_DIM = 1200;
 
 interface ProRecord {
   plan: 'monthly' | 'lifetime';
@@ -30,25 +32,42 @@ interface EnhanceApiResult {
 }
 
 /**
- * Compress image to JPEG via canvas (OffscreenCanvas available in Edge runtime / Workers).
- * Progressively lowers quality to hit the byte budget.
+ * Fast base64 encoding for ArrayBuffer.
+ * Uses chunked btoa to avoid stack overflow on large buffers.
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+  }
+  return btoa(binary);
+}
+
+/**
+ * Compress image to JPEG via OffscreenCanvas.
+ * - Max longest side: MAX_PREVIEW_DIM (1200px)
+ * - Progressively lowers JPEG quality to hit byte budget (500KB)
+ * - Falls back to smaller dimensions if still too large
  */
 async function compressToJpeg(
   inputBytes: ArrayBuffer,
   contentType: string,
   maxBytes: number,
 ): Promise<{ blob: Blob; width: number; height: number }> {
-  // Decode the image
   const sourceBlob = new Blob([inputBytes], { type: contentType });
   const bitmap = await createImageBitmap(sourceBlob);
 
   let targetWidth = bitmap.width;
   let targetHeight = bitmap.height;
 
-  // If the image is very large, scale it down first (max 2048 on longest side for preview)
-  const MAX_DIM = 2048;
-  if (targetWidth > MAX_DIM || targetHeight > MAX_DIM) {
-    const ratio = Math.min(MAX_DIM / targetWidth, MAX_DIM / targetHeight);
+  // Scale down for preview — max 1200px longest side
+  if (targetWidth > MAX_PREVIEW_DIM || targetHeight > MAX_PREVIEW_DIM) {
+    const ratio = Math.min(MAX_PREVIEW_DIM / targetWidth, MAX_PREVIEW_DIM / targetHeight);
     targetWidth = Math.round(targetWidth * ratio);
     targetHeight = Math.round(targetHeight * ratio);
   }
@@ -59,26 +78,24 @@ async function compressToJpeg(
   bitmap.close();
 
   // Try progressively lower quality
-  for (const quality of [0.85, 0.75, 0.65, 0.5, 0.35]) {
+  for (const quality of [0.82, 0.7, 0.55, 0.4, 0.3]) {
     const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
     if (blob.size <= maxBytes) {
       return { blob, width: targetWidth, height: targetHeight };
     }
   }
 
-  // Still too large? Scale down more aggressively
-  const scale = 0.5;
-  const sw = Math.round(targetWidth * scale);
-  const sh = Math.round(targetHeight * scale);
+  // Still too large — scale down to 50% and retry
+  const sw = Math.round(targetWidth * 0.5);
+  const sh = Math.round(targetHeight * 0.5);
   const smallCanvas = new OffscreenCanvas(sw, sh);
   const sctx = smallCanvas.getContext('2d')!;
-  // Re-decode since we closed bitmap
   const reBlob = await canvas.convertToBlob({ type: 'image/png' });
   const reBitmap = await createImageBitmap(reBlob);
   sctx.drawImage(reBitmap, 0, 0, sw, sh);
   reBitmap.close();
 
-  const finalBlob = await smallCanvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
+  const finalBlob = await smallCanvas.convertToBlob({ type: 'image/jpeg', quality: 0.65 });
   return { blob: finalBlob, width: sw, height: sh };
 }
 
@@ -155,12 +172,7 @@ export async function POST(request: NextRequest) {
     }
 
     const arrayBuffer = await image.arrayBuffer();
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer).reduce(
-        (data, byte) => data + String.fromCharCode(byte),
-        ''
-      )
-    );
+    const base64 = arrayBufferToBase64(arrayBuffer);
     const dataUrl = `data:${image.type};base64,${base64}`;
 
     let previewDataUrl: string;
@@ -225,23 +237,13 @@ export async function POST(request: NextRequest) {
 
           // If already small enough, use as-is
           if (imgBuffer.byteLength <= MAX_PREVIEW_BYTES) {
-            const b64 = btoa(
-              new Uint8Array(imgBuffer).reduce(
-                (data, byte) => data + String.fromCharCode(byte),
-                ''
-              )
-            );
+            const b64 = arrayBufferToBase64(imgBuffer);
             previewDataUrl = `data:${imgContentType};base64,${b64}`;
           } else {
-            // Compress to JPEG preview
+            // Compress to JPEG preview (<500KB)
             const { blob } = await compressToJpeg(imgBuffer, imgContentType, MAX_PREVIEW_BYTES);
             const compressedBuffer = await blob.arrayBuffer();
-            const b64 = btoa(
-              new Uint8Array(compressedBuffer).reduce(
-                (data, byte) => data + String.fromCharCode(byte),
-                ''
-              )
-            );
+            const b64 = arrayBufferToBase64(compressedBuffer);
             previewDataUrl = `data:image/jpeg;base64,${b64}`;
           }
         } else {
@@ -275,9 +277,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      // previewUrl: compressed JPEG data URL (<1MB) for instant display
+      // previewUrl: compressed JPEG data URL (<500KB) for instant display
       previewUrl: previewDataUrl,
-      // hdUrl: original full-resolution URL from fal.ai (for "download full res")
+      // hdUrl: original full-resolution URL from fal.ai (for "download HD original")
       hdUrl: hdUrl || undefined,
       // Legacy field (same as previewUrl for backward compat)
       enhancedUrl: previewDataUrl,
@@ -300,6 +302,6 @@ export async function GET() {
     status: 'ok',
     hasApiKey: !!process.env.FAL_AI_API_KEY,
     demoMode: !process.env.FAL_AI_API_KEY,
-    version: '3.0.0',
+    version: '4.0.0',
   });
 }

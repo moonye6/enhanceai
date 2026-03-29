@@ -5,11 +5,76 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { checkRateLimit, incrementUsage, syncFromServer, RateLimitResult } from '@/lib/rateLimit';
 
+// Tips shown during enhancement — rotated every few seconds
+const ENHANCE_TIPS = [
+  '💡 Tip: AuraSR AI generates new pixels with realistic detail recovery',
+  '📸 Tip: For best results, use sharp original photos without heavy compression',
+  '⚡ Tip: Smaller images process faster — 512×512 takes ~5 seconds',
+  '🎨 Tip: AI super resolution works best on faces, textures, and natural scenes',
+  '🔍 Tip: After enhancement, use "Download HD Original" for the full 4× resolution',
+  '☁️ Tip: Processing runs on edge servers worldwide for low latency',
+  '🖼️ Tip: Supported formats: JPEG, PNG, WebP — up to 5MB',
+  '🚀 Tip: Pro users get 100 enhancements per day and up to 8× upscaling',
+  '🔒 Tip: Your images are processed in real-time and never stored permanently',
+  '✨ Tip: AI enhancement can recover details lost in low-resolution images',
+];
+
 interface User {
   id: string;
   email: string;
   name: string;
   image?: string;
+}
+
+/**
+ * Client-side image compression: resize & compress to stay under maxBytes (default 3MB).
+ * Returns a File ready for upload.
+ */
+async function compressImageForUpload(file: File, maxBytes = 3 * 1024 * 1024): Promise<File> {
+  // If already small enough, return as-is
+  if (file.size <= maxBytes) return file;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+
+      // Scale down to max 2048px longest side to limit fal.ai output size
+      const MAX_DIM = 2048;
+      if (width > MAX_DIM || height > MAX_DIM) {
+        const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Try progressively lower quality JPEG
+      const qualities = [0.9, 0.8, 0.7, 0.6, 0.5];
+      const tryCompress = (qi: number) => {
+        const quality = qualities[qi] ?? 0.4;
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { resolve(file); return; }
+            if (blob.size <= maxBytes || qi >= qualities.length - 1) {
+              resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }));
+            } else {
+              tryCompress(qi + 1);
+            }
+          },
+          'image/jpeg',
+          quality,
+        );
+      };
+      tryCompress(0);
+    };
+    img.onerror = () => resolve(file);
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 export default function Home() {
@@ -20,6 +85,8 @@ export default function Home() {
   const [result, setResult] = useState<string>('');
   const [enhancing, setEnhancing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressStage, setProgressStage] = useState('');
+  const [currentTip, setCurrentTip] = useState('');
   const [error, setError] = useState('');
   const [rateLimit, setRateLimit] = useState<RateLimitResult | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -200,6 +267,7 @@ export default function Home() {
 
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const progressValRef = useRef(0)
+  const tipTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Keep ref in sync with state
   const updateProgress = (val: number) => {
@@ -207,23 +275,27 @@ export default function Home() {
     setProgress(val)
   }
 
-  // Smooth simulated progress: starts fast, slows down approaching target, never reaches 100 until done
-  const startProgress = (target: number, durationMs: number) => {
+  /**
+   * Linear smooth progress: moves at constant speed from current → target over durationMs.
+   * Uses small increments every 200ms for a truly smooth, gradual feel.
+   */
+  const startProgress = (target: number, durationMs: number, stage: string) => {
     if (progressRef.current) clearInterval(progressRef.current)
+    setProgressStage(stage)
     const startTime = Date.now()
     const startVal = progressValRef.current
+    const range = target - startVal
     progressRef.current = setInterval(() => {
       const elapsed = Date.now() - startTime
       const ratio = Math.min(elapsed / durationMs, 1)
-      // ease-out curve for natural feel
-      const eased = 1 - Math.pow(1 - ratio, 3)
-      const current = Math.round(startVal + (target - startVal) * eased)
+      // Linear interpolation — no sudden jumps
+      const current = Math.round(startVal + range * ratio)
       updateProgress(current)
       if (ratio >= 1) {
         if (progressRef.current) clearInterval(progressRef.current)
         progressRef.current = null
       }
-    }, 60)
+    }, 200)
   }
 
   const stopProgress = () => {
@@ -233,37 +305,60 @@ export default function Home() {
     }
   }
 
+  // Tips rotation during enhancement
+  const startTips = () => {
+    // Pick a random initial tip
+    setCurrentTip(ENHANCE_TIPS[Math.floor(Math.random() * ENHANCE_TIPS.length)])
+    tipTimerRef.current = setInterval(() => {
+      setCurrentTip(ENHANCE_TIPS[Math.floor(Math.random() * ENHANCE_TIPS.length)])
+    }, 4000)
+  }
+
+  const stopTips = () => {
+    if (tipTimerRef.current) {
+      clearInterval(tipTimerRef.current)
+      tipTimerRef.current = null
+    }
+  }
+
   const [hdUrl, setHdUrl] = useState<string>('')
 
   const handleEnhance = async () => {
     if (!file) return
 
     setEnhancing(true)
-    updateProgress(5)
+    updateProgress(0)
     setError('')
     setHdUrl('')
+    setResult('')
+    startTips()
 
     try {
+      // Phase 1: Client-side compression (0→15%, ~2s)
+      startProgress(15, 2000, 'Preparing image...')
+      const compressedFile = await compressImageForUpload(file)
+
       const formData = new FormData()
-      formData.append('image', file)
+      formData.append('image', compressedFile)
       formData.append('userId', user?.id || 'anonymous')
 
-      // Phase 1: uploading + AI processing (5→85, smooth over ~20s)
-      startProgress(85, 20000)
+      // Phase 2: Uploading + AI processing (15→75%, ~30s — covers the full server round-trip)
+      startProgress(75, 30000, 'AI is enhancing your image...')
 
       const response = await fetch('/api/enhance', {
         method: 'POST',
         body: formData,
       })
 
-      // Response headers received — parsing body
-      startProgress(95, 3000)
+      // Response headers received — downloading compressed result
+      startProgress(90, 5000, 'Downloading enhanced image...')
 
       const data = await response.json()
       stopProgress()
 
       if (!response.ok) {
         updateProgress(0)
+        stopTips()
         setError(data.error || 'Enhancement failed')
         if (data.code === 'RATE_LIMIT_EXCEEDED') {
           setShowUpgradeModal(true)
@@ -272,8 +367,12 @@ export default function Home() {
           }
         }
       } else {
-        // Phase 3: done (→100, instant)
-        updateProgress(100)
+        // Phase 5: Done (→100%)
+        startProgress(100, 500, 'Complete!')
+        setTimeout(() => {
+          stopProgress()
+          stopTips()
+        }, 600)
         setResult(data.previewUrl || data.enhancedUrl)
         setHdUrl(data.hdUrl || '')
         if (data.demo) {
@@ -289,6 +388,7 @@ export default function Home() {
       }
     } catch {
       stopProgress()
+      stopTips()
       updateProgress(0)
       setError('Network error, please try again')
     } finally {
@@ -304,6 +404,9 @@ export default function Home() {
     setError('')
     updateProgress(0)
     stopProgress()
+    stopTips()
+    setCurrentTip('')
+    setProgressStage('')
   }
 
   // Require login before performing an action
@@ -403,16 +506,35 @@ export default function Home() {
                 )}
 
                 {enhancing && (
-                  <div className="text-center">
-                    <p className="text-white">Enhancing... {progress}%</p>
-                    <div className="w-48 h-2 bg-slate-700 rounded-full mt-2">
-                      <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                  <div className="flex-1 max-w-xs">
+                    <div className="text-center mb-3">
+                      <div className="inline-flex items-center gap-2 mb-2">
+                        <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                        </span>
+                        <span className="text-white font-medium">{progressStage || 'Processing...'}</span>
+                      </div>
+                      <p className="text-2xl font-bold text-blue-400">{progress}%</p>
+                    </div>
+                    <div className="w-full h-3 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-300 ease-linear"
+                        style={{ width: `${progress}%` }}
+                      />
                     </div>
                   </div>
                 )}
               </div>
             )}
           </div>
+
+          {/* Tips during enhancement */}
+          {enhancing && currentTip && (
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-5 py-3 mb-6 transition-all">
+              <p className="text-slate-300 text-sm text-center">{currentTip}</p>
+            </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -445,16 +567,16 @@ export default function Home() {
           {result && (
             <div className="flex flex-col items-center gap-3">
               <div className="flex justify-center gap-4">
-                <a href={result} download="enhanced-image.jpg" className="px-8 py-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition">
-                  ⬇️ Download Enhanced
+                <a href={result} download="enhanced-preview.jpg" className="px-8 py-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition">
+                  ⬇️ Download Preview
                 </a>
                 <button onClick={handleReset} className="px-8 py-4 bg-slate-700 text-white rounded-lg font-semibold hover:bg-slate-600 transition">
                   Enhance Another
                 </button>
               </div>
               {hdUrl && (
-                <a href={hdUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm transition">
-                  🔍 View / Download Full Resolution (4x)
+                <a href={hdUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:text-blue-300 hover:bg-blue-600/30 rounded-lg text-sm font-medium transition">
+                  <span>📥</span> Download HD Original (4× full resolution)
                 </a>
               )}
             </div>
