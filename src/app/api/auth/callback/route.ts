@@ -4,7 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID!
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!
-const REDIRECT_URI = 'https://enhanceai.pages.dev/api/auth/callback'
+// 从环境变量读取回调 URL，支持多环境部署
+const REDIRECT_URI = process.env.NEXTAUTH_URL
+  ? `${process.env.NEXTAUTH_URL}/api/auth/callback`
+  : 'https://enhanceai.pages.dev/api/auth/callback'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
