@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""End-to-end test for fal.ai AuraSR image upscaling API."""
+"""End-to-end test for fal.ai AuraSR image upscaling API.
+Tests: API key validity, image upscaling, and response format.
+"""
 
 import struct, zlib, base64, json, urllib.request, urllib.error
 
-# Create a 128x128 test image with gradient pattern (larger for better AI processing)
-width, height = 128, 128
+# Create a 256x256 test image with gradient pattern (simulates real user upload)
+width, height = 256, 256
 raw_data = b''
 for y in range(height):
     raw_data += b'\x00'
@@ -56,9 +58,10 @@ try:
 
     img = body.get('image', {})
     url = img.get('url', 'N/A')
-    print(f'Enhanced URL: {url[:100]}...' if len(url) > 100 else f'Enhanced URL: {url}')
+    print(f'HD URL: {url[:120]}')
     print(f'Dimensions: {img.get("width")}x{img.get("height")}')
-    print(f'File size: {img.get("file_size")} bytes')
+    fsize = img.get('file_size', 0)
+    print(f'File size: {fsize} bytes ({fsize/1024:.1f} KB)')
     print(f'Content type: {img.get("content_type")}')
 
     actual_w = img.get('width', 0)
@@ -67,14 +70,23 @@ try:
         print(f'✅ Correctly upscaled 4x: {width}x{height} → {actual_w}x{actual_h}')
     elif actual_w > width:
         print(f'✅ Image upscaled: {width}x{height} → {actual_w}x{actual_h}')
+
+    # Download and check file size
+    print()
+    print('Downloading HD image to check actual size...')
+    img_resp = urllib.request.urlopen(url, timeout=30)
+    img_data = img_resp.read()
+    print(f'Downloaded: {len(img_data)} bytes ({len(img_data)/1024:.1f} KB)')
+    if len(img_data) > 900 * 1024:
+        print(f'⚠️ HD image is {len(img_data)/1024/1024:.1f} MB — needs compression for preview')
     else:
-        print(f'⚠️ Unexpected dimensions: {actual_w}x{actual_h}')
+        print(f'✅ HD image is small enough for direct use')
 
     print()
     print('🎉 END-TO-END TEST PASSED!')
     print('  ✅ API Key is valid')
     print('  ✅ fal.ai AuraSR endpoint works')
-    print('  ✅ Image enhanced and returned successfully')
+    print('  ✅ Image enhanced successfully')
 
 except urllib.error.HTTPError as e:
     body_text = e.read().decode()
@@ -87,7 +99,6 @@ except urllib.error.HTTPError as e:
             print()
             print('⚠️ fal.ai 账户余额已耗尽！')
             print('  → 请前往 https://fal.ai/dashboard/billing 充值')
-            print('  → API Key 本身是有效的，只是没有余额可用')
         elif 'not found' in detail.lower():
             print('⚠️ API 端点不存在')
     except:

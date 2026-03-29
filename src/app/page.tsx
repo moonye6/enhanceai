@@ -198,44 +198,87 @@ export default function Home() {
     }
   }, [])
 
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const progressValRef = useRef(0)
+
+  // Keep ref in sync with state
+  const updateProgress = (val: number) => {
+    progressValRef.current = val
+    setProgress(val)
+  }
+
+  // Smooth simulated progress: starts fast, slows down approaching target, never reaches 100 until done
+  const startProgress = (target: number, durationMs: number) => {
+    if (progressRef.current) clearInterval(progressRef.current)
+    const startTime = Date.now()
+    const startVal = progressValRef.current
+    progressRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime
+      const ratio = Math.min(elapsed / durationMs, 1)
+      // ease-out curve for natural feel
+      const eased = 1 - Math.pow(1 - ratio, 3)
+      const current = Math.round(startVal + (target - startVal) * eased)
+      updateProgress(current)
+      if (ratio >= 1) {
+        if (progressRef.current) clearInterval(progressRef.current)
+        progressRef.current = null
+      }
+    }, 60)
+  }
+
+  const stopProgress = () => {
+    if (progressRef.current) {
+      clearInterval(progressRef.current)
+      progressRef.current = null
+    }
+  }
+
+  const [hdUrl, setHdUrl] = useState<string>('')
+
   const handleEnhance = async () => {
     if (!file) return
 
     setEnhancing(true)
-    setProgress(10)
+    updateProgress(5)
     setError('')
+    setHdUrl('')
 
     try {
-      setProgress(30)
       const formData = new FormData()
       formData.append('image', file)
       formData.append('userId', user?.id || 'anonymous')
 
-      setProgress(50)
+      // Phase 1: uploading + AI processing (5→85, smooth over ~20s)
+      startProgress(85, 20000)
+
       const response = await fetch('/api/enhance', {
         method: 'POST',
         body: formData,
       })
 
-      setProgress(80)
+      // Response headers received — parsing body
+      startProgress(95, 3000)
+
       const data = await response.json()
+      stopProgress()
 
       if (!response.ok) {
+        updateProgress(0)
         setError(data.error || 'Enhancement failed')
         if (data.code === 'RATE_LIMIT_EXCEEDED') {
           setShowUpgradeModal(true)
-          // 同步服务端限流状态
           if (typeof data.remaining === 'number') {
             setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))
           }
         }
       } else {
-        setResult(data.enhancedUrl)
-        // Demo 模式提示
+        // Phase 3: done (→100, instant)
+        updateProgress(100)
+        setResult(data.previewUrl || data.enhancedUrl)
+        setHdUrl(data.hdUrl || '')
         if (data.demo) {
           setError('⚠️ Demo mode: AI enhancement is not active. The image shown is the original. Please configure FAL_AI_API_KEY for real AI processing.')
         }
-        // 用服务端返回的 remaining 值覆盖客户端计数（服务端为准）
         if (typeof data.remaining === 'number') {
           setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))
         } else {
@@ -245,10 +288,11 @@ export default function Home() {
         if (data.isPro) setIsPro(true)
       }
     } catch {
+      stopProgress()
+      updateProgress(0)
       setError('Network error, please try again')
     } finally {
       setEnhancing(false)
-      setProgress(100)
     }
   }
 
@@ -256,7 +300,10 @@ export default function Home() {
     setFile(null)
     setPreview('')
     setResult('')
+    setHdUrl('')
     setError('')
+    updateProgress(0)
+    stopProgress()
   }
 
   // Require login before performing an action
@@ -396,13 +443,20 @@ export default function Home() {
           )}
 
           {result && (
-            <div className="flex justify-center gap-4">
-              <a href={result} download="enhanced-image.png" className="px-8 py-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition">
-                ⬇️ Download Enhanced
-              </a>
-              <button onClick={handleReset} className="px-8 py-4 bg-slate-700 text-white rounded-lg font-semibold hover:bg-slate-600 transition">
-                Enhance Another
-              </button>
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex justify-center gap-4">
+                <a href={result} download="enhanced-image.jpg" className="px-8 py-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition">
+                  ⬇️ Download Enhanced
+                </a>
+                <button onClick={handleReset} className="px-8 py-4 bg-slate-700 text-white rounded-lg font-semibold hover:bg-slate-600 transition">
+                  Enhance Another
+                </button>
+              </div>
+              {hdUrl && (
+                <a href={hdUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm transition">
+                  🔍 View / Download Full Resolution (4x)
+                </a>
+              )}
             </div>
           )}
 
