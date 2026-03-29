@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import type { KVStore } from '@/lib/proStatus';
 
-const FAL_AI_ENDPOINT = 'https://fal.run/fal-ai/image-upscaling';
+// AuraSR: fast, high-quality 4x image upscaler ($0.001/compute-second)
+const FAL_AI_ENDPOINT = 'https://fal.run/fal-ai/aura-sr';
 const FREE_TIER_LIMIT = 3;
 const PRO_TIER_LIMIT = 100;
 
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
       enhancedUrl = dataUrl;
       demo = true;
     } else {
-      // Real mode: call fal.ai for AI enhancement
+      // Real mode: call fal.ai AuraSR for 4x AI upscaling
       const response = await fetch(FAL_AI_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -116,17 +117,25 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           image_url: dataUrl,
-          scale: 2,
-          model: 'realesrgan-x4plus',
+          checkpoint_version: 'v2',
         }),
       });
 
       if (!response.ok) {
         const errText = await response.text().catch(() => 'Unknown');
         console.error('[enhance] fal.ai error:', response.status, errText);
+        // Parse fal.ai error for user-friendly message
+        let userMessage = 'Enhancement failed';
+        try {
+          const errData = JSON.parse(errText);
+          if (errData.detail) {
+            userMessage = errData.detail;
+          }
+        } catch { /* use default message */ }
         return NextResponse.json({
-          error: 'Enhancement failed',
+          error: userMessage,
           code: 'ENHANCEMENT_FAILED',
+          falStatus: response.status,
         }, { status: 500 });
       }
 
@@ -156,7 +165,7 @@ export async function POST(request: NextRequest) {
       await kv.put(historyKey, JSON.stringify({
         originalUrl: dataUrl.substring(0, 100) + '...',
         enhancedUrl: demo ? '(demo mode)' : enhancedUrl,
-        scale: 2,
+        scale: 4,
         createdAt: new Date().toISOString(),
       }), { expirationTtl: 30 * 86400 });
 
