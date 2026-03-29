@@ -128,6 +128,29 @@ export default function Home() {
     }
   }, [loading, user, searchParams])
 
+  // Sync real usage from server on mount & when user/isPro changes
+  useEffect(() => {
+    // Start with local cache for instant display
+    const localLimit = checkRateLimit(isPro)
+    setRateLimit(localLimit)
+
+    // Then sync from server for accuracy
+    const uid = user?.id
+    if (!uid) return
+
+    fetch(`/api/usage?userId=${encodeURIComponent(uid)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && typeof data.remaining === 'number') {
+          const synced = syncFromServer(data.remaining, data.isPro ?? isPro)
+          setRateLimit(synced)
+          if (data.isPro) setIsPro(true)
+        }
+      })
+      .catch(() => { /* keep local cache */ })
+  }, [user, isPro])
+
+
   // PayPal callback
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
@@ -438,12 +461,17 @@ export default function Home() {
       if (!response.ok) {
         updateProgress(0)
         stopTips()
-        setError(data.error || 'Enhancement failed')
+        const errorMsg = data.error || 'Enhancement failed'
+        setError(errorMsg)
         if (data.code === 'RATE_LIMIT_EXCEEDED') {
           setShowUpgradeModal(true)
           if (typeof data.remaining === 'number') {
             setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))
           }
+        } else if (data.code === 'KV_UNAVAILABLE') {
+          setError('⚠️ Service temporarily unavailable. Please try again in a moment.')
+        } else if (data.code === 'DOWNLOAD_FAILED') {
+          setError('⚠️ Failed to download the enhanced image. Please try again.')
         }
         setEnhancing(false)
         return
@@ -688,7 +716,7 @@ export default function Home() {
                 </button>
               </div>
               {hdUrl && (
-                <a href={hdUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:text-blue-300 hover:bg-blue-600/30 rounded-lg text-sm font-medium transition">
+                <a href={hdUrl} download="enhanced-hd-4x.jpg" className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:text-blue-300 hover:bg-blue-600/30 rounded-lg text-sm font-medium transition">
                   <span>📥</span> Download HD Original (4× full resolution)
                 </a>
               )}

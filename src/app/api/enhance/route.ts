@@ -3,7 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 
 import type { KVStore } from '@/lib/proStatus';
-import { arrayBufferToBase64, compressToJpeg, MAX_PREVIEW_DIM } from '@/lib/image-utils';
+import { arrayBufferToBase64, compressToJpeg } from '@/lib/image-utils';
 import {
   FAL_QUEUE_SUBMIT_URL,
   FREE_TIER_LIMIT,
@@ -61,50 +61,80 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Get KV and check rate limit
+    // ---------------------------------------------------------------------------
+    // KV rate-limit check (MANDATORY — if KV unavailable, deny the request)
+    // ---------------------------------------------------------------------------
     let kv: KVStore | null = null;
     let isPro = false;
-    let remaining = FREE_TIER_LIMIT;
+    let remaining = 0;
+    let kvAvailable = false;
 
     try {
       const { getRequestContext } = await import('@cloudflare/next-on-pages');
       const { env } = getRequestContext();
       kv = (env as Record<string, KVStore>)['ENHANCEAI_KV'] ?? null;
+      if (kv) kvAvailable = true;
+    } catch {
+      console.warn('[enhance] getRequestContext not available');
+    }
 
-      if (kv && userId) {
-        // Check Pro status
-        const proRecord = await kv.get(`pro:${userId}`);
-        if (proRecord) {
+    // KV is required for rate limiting — fail closed, not open
+    if (!kvAvailable || !kv) {
+      console.error('[enhance] KV unavailable — refusing request to prevent quota bypass');
+      return NextResponse.json({
+        error: 'Service temporarily unavailable. Please try again later.',
+        code: 'KV_UNAVAILABLE',
+      }, { status: 503 });
+    }
+
+    if (userId) {
+      // Check Pro status
+      const proRecord = await kv.get(`pro:${userId}`);
+      if (proRecord) {
+        try {
           const proData: ProRecord = JSON.parse(proRecord);
           if (proData.plan === 'lifetime' || (proData.expiresAt && new Date(proData.expiresAt) > new Date())) {
             isPro = true;
           }
-        }
-
-        // Check usage based on user type
-        // Free users: total usage (never resets)
-        // Pro users: monthly usage (resets each month)
-        const usageKey = isPro 
-          ? `usage:${userId}:${getCurrentMonth()}`  // Pro: monthly
-          : `usage:${userId}`;  // Free: total forever
-        
-        const usageStr = await kv.get(usageKey);
-        const usage = usageStr ? parseInt(usageStr, 10) : 0;
-        const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
-        remaining = Math.max(0, limit - usage);
-
-        if (usage >= limit) {
-          return NextResponse.json({
-            error: isPro ? 'Monthly limit exceeded' : 'Free trial limit exceeded. Upgrade to Pro for more.',
-            code: 'RATE_LIMIT_EXCEEDED',
-            remaining: 0,
-            isPro,
-            limit,
-          }, { status: 429 });
-        }
+        } catch { /* invalid JSON, treat as free */ }
       }
-    } catch {
-      console.warn('[enhance] getRequestContext not available');
+
+      // Check usage based on user type
+      // Free users: total usage (never resets)
+      // Pro users: monthly usage (resets each month)
+      const usageKey = isPro 
+        ? `usage:${userId}:${getCurrentMonth()}`  // Pro: monthly
+        : `usage:${userId}`;  // Free: total forever
+      
+      const usageStr = await kv.get(usageKey);
+      const usage = usageStr ? parseInt(usageStr, 10) : 0;
+      const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
+      remaining = Math.max(0, limit - usage);
+
+      if (usage >= limit) {
+        return NextResponse.json({
+          error: isPro ? 'Monthly limit exceeded' : 'Free trial limit exceeded. Upgrade to Pro for more.',
+          code: 'RATE_LIMIT_EXCEEDED',
+          remaining: 0,
+          isPro,
+          limit,
+        }, { status: 429 });
+      }
+    } else {
+      // No userId — treat as anonymous, still enforce limit
+      const anonKey = `usage:anonymous`;
+      const usageStr = await kv.get(anonKey);
+      const usage = usageStr ? parseInt(usageStr, 10) : 0;
+      remaining = Math.max(0, FREE_TIER_LIMIT - usage);
+
+      if (usage >= FREE_TIER_LIMIT) {
+        return NextResponse.json({
+          error: 'Free trial limit exceeded. Please sign in for more.',
+          code: 'RATE_LIMIT_EXCEEDED',
+          remaining: 0,
+          isPro: false,
+        }, { status: 429 });
+      }
     }
 
     // Read image and compress if too large
@@ -112,7 +142,6 @@ export async function POST(request: NextRequest) {
     
     // Pre-compress input image if too large (speed optimization)
     let dataUrl: string;
-    let contentType = image.type;
     
     try {
       const sourceBlob = new Blob([arrayBuffer], { type: image.type });
@@ -125,7 +154,6 @@ export async function POST(request: NextRequest) {
         const compressedBuffer = await blob.arrayBuffer();
         const base64 = arrayBufferToBase64(compressedBuffer);
         dataUrl = `data:image/jpeg;base64,${base64}`;
-        contentType = 'image/jpeg';
         console.log(`[enhance] Compressed to ${width}x${height}, ${blob.size} bytes`);
       } else {
         const base64 = arrayBufferToBase64(arrayBuffer);
@@ -206,10 +234,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Increment usage immediately (to prevent abuse)
-    if (kv && userId) {
+    if (kv) {
+      const effectiveUserId = userId || 'anonymous';
       const usageKey = isPro 
-        ? `usage:${userId}:${getCurrentMonth()}` 
-        : `usage:${userId}`;
+        ? `usage:${effectiveUserId}:${getCurrentMonth()}` 
+        : `usage:${effectiveUserId}`;
       
       const usageStr = await kv.get(usageKey);
       const usage = usageStr ? parseInt(usageStr, 10) : 0;

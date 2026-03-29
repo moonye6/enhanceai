@@ -55,7 +55,14 @@ function getApiBase(): string {
 }
 
 function getSiteUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? '';
+  const url = process.env.NEXT_PUBLIC_SITE_URL ?? '';
+  if (!url) {
+    throw new Error(
+      'Missing NEXT_PUBLIC_SITE_URL environment variable. ' +
+      'PayPal requires absolute URLs for return_url / cancel_url.',
+    );
+  }
+  return url.replace(/\/+$/, ''); // 去除末尾斜杠
 }
 
 // ---------------------------------------------------------------------------
