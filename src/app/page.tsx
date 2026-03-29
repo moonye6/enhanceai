@@ -97,7 +97,7 @@ export default function Home() {
   }, [paymentLoading])
 
   const handleLogin = () => {
-    window.location.href = '/api/auth/callback'
+    window.location.href = '/api/auth/callback/google'
   }
 
   const handleLogout = async () => {

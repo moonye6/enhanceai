@@ -7,14 +7,14 @@ import type { KVStore } from '@/lib/proStatus'
 // ---------------------------------------------------------------------------
 // 辅助：动态推导 redirect_uri（解决 redirect_uri_mismatch）
 // 始终从当前请求 URL 推导 origin，自动适配多域名部署：
-//   - 测试：https://enchanceai.pages.dev/api/auth/callback
-//   - 正式：https://www.enhanceai.online/api/auth/callback
-//   - 本地：http://localhost:3000/api/auth/callback
+//   - 测试：https://enchanceai.pages.dev/api/auth/callback/google
+//   - 正式：https://www.enhanceai.online/api/auth/callback/google
+//   - 本地：http://localhost:3000/api/auth/callback/google
 // ⚠️ 所有域名的回调地址都必须在 Google Cloud Console 中注册
 // ---------------------------------------------------------------------------
 function getRedirectUri(request: NextRequest): string {
   const url = new URL(request.url)
-  return `${url.origin}/api/auth/callback`
+  return `${url.origin}/api/auth/callback/google`
 }
 
 export async function GET(request: NextRequest) {
