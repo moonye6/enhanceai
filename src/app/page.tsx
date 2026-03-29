@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { checkRateLimit, incrementUsage, syncFromServer, RateLimitResult } from '@/lib/rateLimit';
 
@@ -39,6 +40,21 @@ export default function Home() {
       })
       .catch(() => setLoading(false))
   }, [])
+
+  // Handle ?upgrade= param from Pricing page
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (loading) return
+    const upgradeParam = searchParams.get('upgrade')
+    if (upgradeParam === 'monthly' || upgradeParam === 'lifetime') {
+      if (user) {
+        setShowUpgradeModal(true)
+      } else {
+        // Redirect to login, after login user comes back to home and can upgrade
+        window.location.href = '/api/auth/callback/google'
+      }
+    }
+  }, [loading, user, searchParams])
 
   // Check rate limit
   useEffect(() => {
@@ -239,30 +255,20 @@ export default function Home() {
     setError('')
   }
 
-  // Login wall
+  // Require login before performing an action
+  const requireLogin = (action?: () => void) => {
+    if (!user) {
+      handleLogin()
+      return false
+    }
+    action?.()
+    return true
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>
-      </main>
-    )
-  }
-
-  if (!user) {
-    return (
-      <main className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto px-4">
-          <div className="text-6xl mb-6">✨</div>
-          <h1 className="text-4xl font-bold text-white mb-4">EnhanceAI</h1>
-          <p className="text-slate-400 mb-8">Upscale, denoise & sharpen your images with AI</p>
-          <button
-            onClick={handleLogin}
-            className="w-full py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition text-lg"
-          >
-            Sign in with Google
-          </button>
-          <p className="text-slate-500 text-sm mt-4">Free: 3 enhancements/day • Pro: 100/day</p>
-        </div>
       </main>
     )
   }
@@ -275,9 +281,17 @@ export default function Home() {
           <Link href="/" className="text-xl font-bold text-white">EnhanceAI</Link>
           <div className="flex gap-6 items-center">
             <Link href="/pricing" className="text-slate-300 hover:text-white transition">Pricing</Link>
-            <Link href="/history" className="text-slate-300 hover:text-white transition">History</Link>
-            <span className="text-slate-300">{user.name}</span>
-            <button onClick={handleLogout} className="text-red-400 hover:text-red-300 transition">Sign out</button>
+            {user ? (
+              <>
+                <Link href="/history" className="text-slate-300 hover:text-white transition">History</Link>
+                <span className="text-slate-300">{user.name}</span>
+                <button onClick={handleLogout} className="text-red-400 hover:text-red-300 transition">Sign out</button>
+              </>
+            ) : (
+              <button onClick={handleLogin} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition text-sm">
+                Sign in with Google
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -354,7 +368,7 @@ export default function Home() {
             <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6">
               <p className="text-red-200">{error}</p>
               {error.includes('limit') && (
-                <button onClick={() => setShowUpgradeModal(true)} className="mt-2 text-blue-400 hover:underline">
+                <button onClick={() => requireLogin(() => setShowUpgradeModal(true))} className="mt-2 text-blue-400 hover:underline">
                   Upgrade to Pro for more →
                 </button>
               )}
@@ -365,11 +379,11 @@ export default function Home() {
           {file && !result && !enhancing && (
             <div className="flex justify-center gap-4">
               <button
-                onClick={handleEnhance}
-                disabled={!rateLimit?.allowed}
+                onClick={() => requireLogin(handleEnhance)}
+                disabled={user ? !rateLimit?.allowed : false}
                 className="px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
               >
-                ✨ Enhance Image {rateLimit && `(${rateLimit.remaining} left)`}
+                {user ? `✨ Enhance Image ${rateLimit ? `(${rateLimit.remaining} left)` : ''}` : '✨ Sign in to Enhance'}
               </button>
               <button onClick={handleReset} className="px-8 py-4 bg-slate-700 text-white rounded-lg font-semibold hover:bg-slate-600 transition">
                 Reset
@@ -393,9 +407,26 @@ export default function Home() {
             <div className="mt-8 bg-gradient-to-r from-blue-900 to-purple-900 rounded-2xl p-8 text-center">
               <h3 className="text-2xl font-bold text-white mb-2">Daily limit reached</h3>
               <p className="text-slate-300 mb-4">Upgrade to Pro for 100 enhancements/day</p>
-              <button onClick={() => setShowUpgradeModal(true)} className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">
+              <button onClick={() => requireLogin(() => setShowUpgradeModal(true))} className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">
                 Upgrade to Pro →
               </button>
+            </div>
+          )}
+
+          {/* CTA for non-logged-in users */}
+          {!user && (
+            <div className="mt-12 text-center">
+              <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-2xl p-8 max-w-2xl mx-auto border border-slate-700">
+                <h3 className="text-2xl font-bold text-white mb-3">Ready to enhance your images?</h3>
+                <p className="text-slate-400 mb-6">Sign in with Google to get 3 free enhancements per day</p>
+                <button
+                  onClick={handleLogin}
+                  className="px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition text-lg"
+                >
+                  Sign in with Google — It&apos;s Free
+                </button>
+                <p className="text-slate-500 text-sm mt-4">Free: 3 enhancements/day • Pro: 100/day</p>
+              </div>
             </div>
           )}
         </div>

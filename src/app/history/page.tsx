@@ -58,7 +58,7 @@ export default function HistoryPage() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-white mb-4">Sign in required</h1>
           <p className="text-slate-400 mb-8">Please sign in to view your enhancement history.</p>
-          <a href="/api/auth/callback" className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
+          <a href="/api/auth/callback/google" className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
             Sign in with Google
           </a>
         </div>
