@@ -231,6 +231,10 @@ export default function Home() {
         }
       } else {
         setResult(data.enhancedUrl)
+        // Demo 模式提示
+        if (data.demo) {
+          setError('⚠️ Demo mode: AI enhancement is not active. The image shown is the original. Please configure FAL_AI_API_KEY for real AI processing.')
+        }
         // 用服务端返回的 remaining 值覆盖客户端计数（服务端为准）
         if (typeof data.remaining === 'number') {
           setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))

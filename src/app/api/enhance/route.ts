@@ -99,49 +99,51 @@ export async function POST(request: NextRequest) {
     );
     const dataUrl = `data:${image.type};base64,${base64}`;
 
+    let enhancedUrl: string;
+    let demo = false;
+
     if (isDemoMode) {
-      return NextResponse.json({
-        enhancedUrl: dataUrl,
-        demo: true,
-        message: 'Demo mode — set FAL_AI_API_KEY for real enhancement',
-        remaining,
-        isPro,
+      // Demo mode: return original image as-is (no AI processing)
+      enhancedUrl = dataUrl;
+      demo = true;
+    } else {
+      // Real mode: call fal.ai for AI enhancement
+      const response = await fetch(FAL_AI_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${FAL_AI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image_url: dataUrl,
+          scale: 2,
+          model: 'realesrgan-x4plus',
+        }),
       });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => 'Unknown');
+        console.error('[enhance] fal.ai error:', response.status, errText);
+        return NextResponse.json({
+          error: 'Enhancement failed',
+          code: 'ENHANCEMENT_FAILED',
+        }, { status: 500 });
+      }
+
+      const result: EnhanceApiResult = await response.json();
+      const resultUrl = result.image?.url || result.images?.[0]?.url;
+
+      if (!resultUrl) {
+        return NextResponse.json({
+          error: 'No enhanced image URL in response',
+          code: 'ENHANCEMENT_FAILED',
+        }, { status: 500 });
+      }
+
+      enhancedUrl = resultUrl;
     }
 
-    const response = await fetch(FAL_AI_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Key ${FAL_AI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        image_url: dataUrl,
-        scale: 2,
-        model: 'realesrgan-x4plus',
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => 'Unknown');
-      console.error('[enhance] fal.ai error:', response.status, errText);
-      return NextResponse.json({
-        error: 'Enhancement failed',
-        code: 'ENHANCEMENT_FAILED',
-      }, { status: 500 });
-    }
-
-    const result: EnhanceApiResult = await response.json();
-    const enhancedUrl = result.image?.url || result.images?.[0]?.url;
-
-    if (!enhancedUrl) {
-      return NextResponse.json({
-        error: 'No enhanced image URL in response',
-        code: 'ENHANCEMENT_FAILED',
-      }, { status: 500 });
-    }
-
-    // Increment usage and save history
+    // Increment usage and save history (both demo and real mode)
     if (kv && userId) {
       const today = new Date().toISOString().split('T')[0];
       const rateLimitKey = `ratelimit:${userId}:${today}`;
@@ -153,7 +155,7 @@ export async function POST(request: NextRequest) {
       const historyKey = `history:${userId}:${Date.now()}`;
       await kv.put(historyKey, JSON.stringify({
         originalUrl: dataUrl.substring(0, 100) + '...',
-        enhancedUrl,
+        enhancedUrl: demo ? '(demo mode)' : enhancedUrl,
         scale: 2,
         createdAt: new Date().toISOString(),
       }), { expirationTtl: 30 * 86400 });
@@ -165,6 +167,7 @@ export async function POST(request: NextRequest) {
       enhancedUrl,
       remaining,
       isPro,
+      ...(demo ? { demo: true, message: 'Demo mode — set FAL_AI_API_KEY for real enhancement' } : {}),
     });
 
   } catch (error) {
