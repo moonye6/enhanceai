@@ -6,7 +6,12 @@ import type { KVStore } from '@/lib/proStatus';
 import { arrayBufferToBase64, compressToJpeg, MAX_PREVIEW_BYTES } from '@/lib/image-utils';
 
 // fal.ai Queue API endpoints for AuraSR
-const FAL_AI_QUEUE_BASE = 'https://queue.fal.run/fal-ai/aura-sr/requests';
+// Based on fal.ai documentation:
+// - Submit: POST https://queue.fal.run/fal-ai/aura-sr/requests
+// - Status: GET https://queue.fal.run/fal-ai/aura-sr/requests/{request_id}/status  
+// - Result: The status endpoint returns the result when COMPLETED
+const FAL_AI_MODEL_ID = 'fal-ai/aura-sr';
+const FAL_AI_QUEUE_BASE = 'https://queue.fal.run';
 const FREE_TIER_LIMIT = 3;
 const PRO_TIER_LIMIT = 100;
 
@@ -15,13 +20,26 @@ interface ProRecord {
   expiresAt: string | null;
 }
 
+// fal.ai status response includes result when COMPLETED
 interface FalQueueStatusResponse {
   status: 'IN_QUEUE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
   result?: {
-    image?: { url: string };
-    images?: Array<{ url: string }>;
+    image?: {
+      url: string;
+      width?: number;
+      height?: number;
+      file_size?: number;
+      content_type?: string;
+    };
+    images?: Array<{
+      url: string;
+      width?: number;
+      height?: number;
+    }>;
+    timings?: Record<string, number>;
   };
   error?: string;
+  logs?: Array<{ message: string }>;
 }
 
 interface FalImage {
@@ -30,11 +48,6 @@ interface FalImage {
   height?: number;
   file_size?: number;
   content_type?: string;
-}
-
-interface EnhanceApiResult {
-  image?: FalImage;
-  images?: FalImage[];
 }
 
 /**
@@ -102,7 +115,8 @@ export async function GET(
       }, { status: 500 });
     }
 
-    const statusUrl = `${FAL_AI_QUEUE_BASE}/${requestId}/status`;
+    // Query status endpoint (includes result when COMPLETED)
+    const statusUrl = `${FAL_AI_QUEUE_BASE}/${FAL_AI_MODEL_ID}/requests/${requestId}/status`;
     console.log('[status] Checking status:', statusUrl);
     
     const response = await fetch(statusUrl, {
@@ -118,7 +132,10 @@ export async function GET(
       return NextResponse.json({
         error: 'Failed to check status',
         code: 'STATUS_CHECK_FAILED',
-        details: errText,
+        details: {
+          status: response.status,
+          body: errText.substring(0, 500),
+        },
       }, { status: 500 });
     }
 
@@ -142,46 +159,20 @@ export async function GET(
     }
 
     if (statusResult.status === 'COMPLETED') {
-      // Fetch the actual result
-      const resultUrl = `${FAL_AI_QUEUE_BASE}/${requestId}`;
-      console.log('[status] Fetching result:', resultUrl);
-      
-      const resultResponse = await fetch(resultUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Key ${FAL_AI_API_KEY}`,
-        },
-      });
-
-      if (!resultResponse.ok) {
-        const errText = await resultResponse.text().catch(() => 'Unknown');
-        console.error('[status] fal.ai result error:', resultResponse.status, errText);
-        return NextResponse.json({
-          error: 'Failed to fetch result from fal.ai',
-          code: 'RESULT_FETCH_FAILED',
-          details: {
-            status: resultResponse.status,
-            body: errText.substring(0, 500),
-          },
-        }, { status: 500 });
-      }
-
-      const resultData: EnhanceApiResult = await resultResponse.json();
-      console.log('[status] Result keys:', Object.keys(resultData));
-      
-      const falImage = resultData.image || resultData.images?.[0];
+      // The status response includes the result when COMPLETED
+      const falImage = statusResult.result?.image || statusResult.result?.images?.[0];
       const hdUrl = falImage?.url;
 
       if (!hdUrl) {
-        console.error('[status] No image URL in result:', JSON.stringify(resultData).substring(0, 500));
+        console.error('[status] No image URL in result:', JSON.stringify(statusResult.result).substring(0, 500));
         return NextResponse.json({
           error: 'No enhanced image URL in response',
           code: 'ENHANCEMENT_FAILED',
-          details: Object.keys(resultData),
+          details: statusResult.result,
         });
       }
 
-      // Download the enhanced image from fal.ai and compress for preview
+      // Download the enhanced image and compress for preview
       let previewDataUrl = hdUrl;
       try {
         const imgResp = await fetch(hdUrl);
@@ -189,12 +180,10 @@ export async function GET(
           const imgBuffer = await imgResp.arrayBuffer();
           const imgContentType = imgResp.headers.get('content-type') || 'image/png';
 
-          // If already small enough, use as-is
           if (imgBuffer.byteLength <= MAX_PREVIEW_BYTES) {
             const b64 = arrayBufferToBase64(imgBuffer);
             previewDataUrl = `data:${imgContentType};base64,${b64}`;
           } else {
-            // Compress to JPEG preview (<500KB)
             const { blob } = await compressToJpeg(imgBuffer, imgContentType, MAX_PREVIEW_BYTES);
             const compressedBuffer = await blob.arrayBuffer();
             const b64 = arrayBufferToBase64(compressedBuffer);
@@ -203,7 +192,6 @@ export async function GET(
         }
       } catch (downloadErr) {
         console.warn('[status] Failed to proxy image, falling back to direct URL:', downloadErr);
-        // Keep hdUrl as previewDataUrl fallback
       }
 
       // Save to history
@@ -221,12 +209,9 @@ export async function GET(
         await kv.delete(taskKey);
       }
 
-      // Calculate remaining - USE CORRECT KEY FORMAT
+      // Calculate remaining
       let remaining = FREE_TIER_LIMIT;
       if (kv && userId) {
-        // Use the same key format as the enhance route:
-        // Free: usage:{userId} (permanent)
-        // Pro: usage:{userId}:{YYYY-MM} (monthly)
         const usageKey = isPro 
           ? `usage:${userId}:${getCurrentMonth()}` 
           : `usage:${userId}`;
