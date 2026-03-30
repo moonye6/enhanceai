@@ -37,6 +37,13 @@ interface EnhanceApiResult {
   images?: FalImage[];
 }
 
+/**
+ * Get current month in YYYY-MM format for Pro users
+ */
+function getCurrentMonth(): string {
+  return new Date().toISOString().slice(0, 7);
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -57,6 +64,7 @@ export async function GET(
       return NextResponse.json({
         status: 'completed',
         message: 'Demo mode completed',
+        remaining: FREE_TIER_LIMIT,
       });
     }
 
@@ -95,6 +103,8 @@ export async function GET(
     }
 
     const statusUrl = `${FAL_AI_QUEUE_BASE}/${requestId}/status`;
+    console.log('[status] Checking status:', statusUrl);
+    
     const response = await fetch(statusUrl, {
       method: 'GET',
       headers: {
@@ -108,10 +118,12 @@ export async function GET(
       return NextResponse.json({
         error: 'Failed to check status',
         code: 'STATUS_CHECK_FAILED',
+        details: errText,
       }, { status: 500 });
     }
 
     const statusResult: FalQueueStatusResponse = await response.json();
+    console.log('[status] fal.ai status:', statusResult.status);
 
     // Handle different statuses
     if (statusResult.status === 'IN_QUEUE' || statusResult.status === 'IN_PROGRESS') {
@@ -132,6 +144,8 @@ export async function GET(
     if (statusResult.status === 'COMPLETED') {
       // Fetch the actual result
       const resultUrl = `${FAL_AI_QUEUE_BASE}/${requestId}`;
+      console.log('[status] Fetching result:', resultUrl);
+      
       const resultResponse = await fetch(resultUrl, {
         method: 'GET',
         headers: {
@@ -143,19 +157,27 @@ export async function GET(
         const errText = await resultResponse.text().catch(() => 'Unknown');
         console.error('[status] fal.ai result error:', resultResponse.status, errText);
         return NextResponse.json({
-          error: 'Failed to fetch result',
+          error: 'Failed to fetch result from fal.ai',
           code: 'RESULT_FETCH_FAILED',
+          details: {
+            status: resultResponse.status,
+            body: errText.substring(0, 500),
+          },
         }, { status: 500 });
       }
 
       const resultData: EnhanceApiResult = await resultResponse.json();
+      console.log('[status] Result keys:', Object.keys(resultData));
+      
       const falImage = resultData.image || resultData.images?.[0];
       const hdUrl = falImage?.url;
 
       if (!hdUrl) {
+        console.error('[status] No image URL in result:', JSON.stringify(resultData).substring(0, 500));
         return NextResponse.json({
           error: 'No enhanced image URL in response',
           code: 'ENHANCEMENT_FAILED',
+          details: Object.keys(resultData),
         });
       }
 
@@ -199,14 +221,22 @@ export async function GET(
         await kv.delete(taskKey);
       }
 
-      // Calculate remaining
+      // Calculate remaining - USE CORRECT KEY FORMAT
       let remaining = FREE_TIER_LIMIT;
       if (kv && userId) {
-        const today = new Date().toISOString().split('T')[0];
-        const rateLimitKey = `ratelimit:${userId}:${today}`;
-        const usageStr = await kv.get(rateLimitKey);
+        // Use the same key format as the enhance route:
+        // Free: usage:{userId} (permanent)
+        // Pro: usage:{userId}:{YYYY-MM} (monthly)
+        const usageKey = isPro 
+          ? `usage:${userId}:${getCurrentMonth()}` 
+          : `usage:${userId}`;
+        
+        const usageStr = await kv.get(usageKey);
         const usage = usageStr ? parseInt(usageStr, 10) : 0;
-        remaining = Math.max(0, (isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT) - usage);
+        const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
+        remaining = Math.max(0, limit - usage);
+        
+        console.log('[status] Usage calculation:', { usageKey, usage, limit, remaining, isPro });
       }
 
       return NextResponse.json({
@@ -230,6 +260,7 @@ export async function GET(
     return NextResponse.json({
       error: 'Internal server error',
       code: 'INTERNAL_ERROR',
+      message: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
 }
