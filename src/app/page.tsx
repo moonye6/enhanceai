@@ -242,6 +242,13 @@ export default function Home() {
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+    
+    // Require login before uploading
+    if (!user) {
+      handleLogin()
+      return
+    }
+    
     const droppedFile = e.dataTransfer.files[0]
     if (droppedFile && droppedFile.type.startsWith('image/')) {
       setFile(droppedFile)
@@ -249,13 +256,20 @@ export default function Home() {
       setResult('')
       setError('')
     }
-  }, [])
+  }, [user, handleLogin])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
   }, [])
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    // Require login before uploading
+    if (!user) {
+      handleLogin()
+      e.target.value = ''  // Reset input
+      return
+    }
+    
     const selectedFile = e.target.files?.[0]
     if (selectedFile && selectedFile.type.startsWith('image/')) {
       setFile(selectedFile)
@@ -263,7 +277,7 @@ export default function Home() {
       setResult('')
       setError('')
     }
-  }, [])
+  }, [user, handleLogin])
 
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const progressValRef = useRef(0)
@@ -567,10 +581,26 @@ export default function Home() {
             />
             {!file ? (
               <div className="text-center py-12">
-                <div className="text-6xl mb-4">📷</div>
-                <p className="text-xl text-white mb-2">Drag & drop image here</p>
-                <p className="text-slate-400">or click to upload</p>
-                <p className="text-slate-500 text-sm mt-4">JPG, PNG, WebP • Max 5MB</p>
+                {!user ? (
+                  <>
+                    <div className="text-6xl mb-4">🔐</div>
+                    <p className="text-xl text-white mb-2">Sign in to enhance images</p>
+                    <p className="text-slate-400 mb-4">Get 3 free enhancements</p>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleLogin(); }}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
+                    >
+                      Sign in with Google — Free
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-6xl mb-4">📷</div>
+                    <p className="text-xl text-white mb-2">Drag & drop image here</p>
+                    <p className="text-slate-400">or click to upload</p>
+                    <p className="text-slate-500 text-sm mt-4">JPG, PNG, WebP • Max 5MB</p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="flex flex-col md:flex-row gap-8 items-center justify-center">
