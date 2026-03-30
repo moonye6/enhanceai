@@ -14,7 +14,7 @@ const ENHANCE_TIPS = [
   '🔍 Tip: After enhancement, use "Download HD Original" for the full 4× resolution',
   '☁️ Tip: Processing runs on edge servers worldwide for low latency',
   '🖼️ Tip: Supported formats: JPEG, PNG, WebP — up to 5MB',
-  '🚀 Tip: Pro users get 100 enhancements per day and up to 8× upscaling',
+  '🚀 Tip: Pro users get 100 enhancements per month and up to 8× upscaling',
   '🔒 Tip: Your images are processed in real-time and never stored permanently',
   '✨ Tip: AI enhancement can recover details lost in low-resolution images',
 ];
@@ -669,8 +669,8 @@ export default function Home() {
           {/* Upgrade Banner */}
           {rateLimit && !isPro && rateLimit.remaining === 0 && (
             <div className="mt-8 bg-gradient-to-r from-blue-900 to-purple-900 rounded-2xl p-8 text-center">
-              <h3 className="text-2xl font-bold text-white mb-2">Daily limit reached</h3>
-              <p className="text-slate-300 mb-4">Upgrade to Pro for 100 enhancements/day</p>
+              <h3 className="text-2xl font-bold text-white mb-2">Free trial limit reached</h3>
+              <p className="text-slate-300 mb-4">Upgrade to Pro for 100 enhancements/month</p>
               <button onClick={() => requireLogin(() => setShowUpgradeModal(true))} className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">
                 Upgrade to Pro →
               </button>
@@ -682,14 +682,14 @@ export default function Home() {
             <div className="mt-12 text-center">
               <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-2xl p-8 max-w-2xl mx-auto border border-slate-700">
                 <h3 className="text-2xl font-bold text-white mb-3">Ready to enhance your images?</h3>
-                <p className="text-slate-400 mb-6">Sign in with Google to get 3 free enhancements per day</p>
+                <p className="text-slate-400 mb-6">Sign in with Google to get 3 free enhancements</p>
                 <button
                   onClick={handleLogin}
                   className="px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition text-lg"
                 >
                   Sign in with Google — It&apos;s Free
                 </button>
-                <p className="text-slate-500 text-sm mt-4">Free: 3 enhancements/day • Pro: 100/day</p>
+                <p className="text-slate-500 text-sm mt-4">Free: 3 total • Pro: 100/month</p>
               </div>
             </div>
           )}
@@ -770,6 +770,176 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Value Proposition - Free vs Pro Comparison */}
+      <section className="px-4 pb-16 bg-gradient-to-b from-transparent via-blue-950/20 to-transparent">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl font-bold text-white text-center mb-4">Choose Your Plan</h2>
+          <p className="text-slate-400 text-center mb-12 max-w-2xl mx-auto">Start free, upgrade when you need more power</p>
+          
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Free Plan */}
+            <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700/50 relative">
+              <div className="text-center mb-6">
+                <span className="text-4xl">🆓</span>
+                <h3 className="text-xl font-bold text-white mt-2">Free</h3>
+                <div className="mt-2">
+                  <span className="text-3xl font-bold text-white">$0</span>
+                  <span className="text-slate-500">/forever</span>
+                </div>
+              </div>
+              
+              <ul className="space-y-3 mb-6">
+                {[
+                  { text: '3 total enhancements', included: true },
+                  { text: '2× upscaling', included: true },
+                  { text: 'JPEG, PNG, WebP support', included: true },
+                  { text: 'Standard processing speed', included: true },
+                  { text: '100 enhancements/month', included: false },
+                  { text: '8× upscaling', included: false },
+                  { text: 'Priority processing', included: false },
+                  { text: 'Batch processing', included: false },
+                ].map((item, i) => (
+                  <li key={i} className={`flex items-center gap-2 ${item.included ? 'text-slate-300' : 'text-slate-600'}`}>
+                    <span>{item.included ? '✓' : '✗'}</span>
+                    <span>{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+              
+              <div className="text-center">
+                <span className="text-slate-500 text-sm">No credit card required</span>
+              </div>
+            </div>
+            
+            {/* Pro Plan */}
+            <div className="bg-gradient-to-b from-blue-900/40 to-purple-900/40 rounded-2xl p-6 border border-blue-500/50 relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                RECOMMENDED
+              </div>
+              
+              <div className="text-center mb-6">
+                <span className="text-4xl">⭐</span>
+                <h3 className="text-xl font-bold text-white mt-2">Pro</h3>
+                <div className="mt-2">
+                  <span className="text-3xl font-bold text-white">$4.9</span>
+                  <span className="text-slate-400">/month</span>
+                </div>
+                <p className="text-slate-500 text-sm mt-1">or $49 lifetime (save 17%)</p>
+              </div>
+              
+              <ul className="space-y-3 mb-6">
+                {[
+                  { text: '100 enhancements/month', included: true },
+                  { text: '8× upscaling (HD quality)', included: true },
+                  { text: 'JPEG, PNG, WebP support', included: true },
+                  { text: 'Priority processing', included: true },
+                  { text: 'Batch processing (coming soon)', included: true },
+                  { text: 'Email support', included: true },
+                  { text: 'API access (coming soon)', included: true },
+                  { text: 'No watermarks', included: true },
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-2 text-slate-200">
+                    <span className="text-green-400">✓</span>
+                    <span>{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+              
+              <Link 
+                href="/pricing"
+                className="block w-full py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl font-semibold text-center hover:from-blue-600 hover:to-purple-600 transition"
+              >
+                Upgrade to Pro
+              </Link>
+            </div>
+          </div>
+          
+          <p className="text-center text-slate-500 text-sm mt-6">
+            💡 Free tier is perfect for trying out. Upgrade when you need more power.
+          </p>
+        </div>
+      </section>
+
+      {/* Before/After Comparison */}
+      <section className="px-4 pb-16">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl font-bold text-white text-center mb-4">See the Difference</h2>
+          <p className="text-slate-400 text-center mb-12 max-w-2xl mx-auto">Real results from our AI enhancement</p>
+          
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Example 1 */}
+            <div className="bg-slate-800/50 rounded-2xl overflow-hidden border border-slate-700/50">
+              <div className="grid grid-cols-2 gap-0">
+                <div className="relative">
+                  <div className="aspect-square bg-slate-900 flex items-center justify-center">
+                    <div className="text-center p-4">
+                      <div className="text-6xl mb-2">🖼️</div>
+                      <div className="text-slate-500 text-sm">Original</div>
+                      <div className="text-slate-600 text-xs">512×512</div>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 left-2 bg-red-500/80 text-white text-xs px-2 py-1 rounded">Before</div>
+                </div>
+                <div className="relative">
+                  <div className="aspect-square bg-gradient-to-br from-blue-900/30 to-purple-900/30 flex items-center justify-center">
+                    <div className="text-center p-4">
+                      <div className="text-6xl mb-2">✨</div>
+                      <div className="text-white text-sm">Enhanced</div>
+                      <div className="text-blue-400 text-xs">2048×2048</div>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 right-2 bg-green-500/80 text-white text-xs px-2 py-1 rounded">After</div>
+                </div>
+              </div>
+              <div className="p-4 text-center">
+                <p className="text-slate-300 font-medium">Portrait Photo</p>
+                <p className="text-slate-500 text-sm">4× upscaling with detail recovery</p>
+              </div>
+            </div>
+            
+            {/* Example 2 */}
+            <div className="bg-slate-800/50 rounded-2xl overflow-hidden border border-slate-700/50">
+              <div className="grid grid-cols-2 gap-0">
+                <div className="relative">
+                  <div className="aspect-square bg-slate-900 flex items-center justify-center">
+                    <div className="text-center p-4">
+                      <div className="text-6xl mb-2">🛍️</div>
+                      <div className="text-slate-500 text-sm">Original</div>
+                      <div className="text-slate-600 text-xs">800×600</div>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 left-2 bg-red-500/80 text-white text-xs px-2 py-1 rounded">Before</div>
+                </div>
+                <div className="relative">
+                  <div className="aspect-square bg-gradient-to-br from-blue-900/30 to-purple-900/30 flex items-center justify-center">
+                    <div className="text-center p-4">
+                      <div className="text-6xl mb-2">💎</div>
+                      <div className="text-white text-sm">Enhanced</div>
+                      <div className="text-blue-400 text-xs">3200×2400</div>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 right-2 bg-green-500/80 text-white text-xs px-2 py-1 rounded">After</div>
+                </div>
+              </div>
+              <div className="p-4 text-center">
+                <p className="text-slate-300 font-medium">Product Image</p>
+                <p className="text-slate-500 text-sm">Crystal clear for e-commerce</p>
+              </div>
+            </div>
+          </div>
+          
+          <p className="text-center mt-8">
+            <Link 
+              href="/pricing" 
+              className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition"
+            >
+              <span>Try it free now</span>
+              <span>→</span>
+            </Link>
+          </p>
+        </div>
+      </section>
+
       {/* FAQ */}
       <section className="px-4 pb-16">
         <div className="max-w-3xl mx-auto">
@@ -777,10 +947,10 @@ export default function Home() {
           <div className="space-y-4">
             {[
               { q: 'What is AI image enhancement?', a: 'AI image enhancement uses deep learning models to intelligently upscale images, recovering fine details, removing noise, and sharpening edges that traditional methods can\'t achieve.' },
-              { q: 'How much does it cost?', a: 'EnhanceAI offers 3 free enhancements per day. For heavy users, our Pro plan starts at $4.9/month with 100 enhancements per day and up to 8× upscaling.' },
+              { q: 'How much does it cost?', a: 'EnhanceAI offers 3 free enhancements total (not per day). For heavy users, our Pro plan is $4.9/month with 100 enhancements per month and up to 8× upscaling.' },
               { q: 'What image formats are supported?', a: 'We support JPEG, PNG, and WebP formats. Maximum file size is 5MB. The enhanced image is available in both compressed preview and full-resolution download.' },
               { q: 'Is my data safe?', a: 'Absolutely. Images are processed in real-time on secure edge servers. We don\'t permanently store your original or enhanced images on our servers.' },
-              { q: 'How does the 4× upscaling work?', a: 'We use AuraSR v2, a state-of-the-art super-resolution AI model. It analyzes your image and generates new pixels with realistic details, effectively quadrupling the resolution (2× width and 2× height).' },
+              { q: 'How does the upscaling work?', a: 'We use AuraSR v2, a state-of-the-art super-resolution AI model. It analyzes your image and generates new pixels with realistic details. Free users get 2× upscaling, Pro users get up to 8×.' },
             ].map((item, i) => (
               <details key={i} className="group bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
                 <summary className="flex items-center justify-between p-5 cursor-pointer text-white font-medium hover:bg-slate-800/80 transition">
@@ -826,9 +996,9 @@ export default function Home() {
             ) : (
               <>
                 <h3 className="text-2xl font-bold text-white mb-4">🚀 Upgrade to Pro</h3>
-                <p className="text-slate-300 mb-6">Daily free limit reached. Upgrade to unlock:</p>
+                <p className="text-slate-300 mb-6">Free trial limit reached. Upgrade to unlock:</p>
                 <ul className="text-slate-300 space-y-2 mb-6">
-                  {['100 enhancements/day', 'Up to 8x upscaling', 'Batch processing', 'Priority support'].map((f, i) => (
+                  {['100 enhancements/month', 'Up to 8x upscaling', 'Batch processing', 'Priority support'].map((f, i) => (
                     <li key={i}>✓ {f}</li>
                   ))}
                 </ul>
