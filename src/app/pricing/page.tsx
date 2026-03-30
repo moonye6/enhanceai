@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 
-export const runtime = 'edge'
-export const dynamic = 'force-dynamic'
+// Static page — no runtime needed, pre-rendered at build time
 
 export const metadata: Metadata = {
   title: 'Pricing — Free & Pro Plans',

@@ -175,6 +175,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* DNS prefetch & preconnect for critical third-party origins */}
+        <link rel="dns-prefetch" href="https://accounts.google.com" />
+        <link rel="preconnect" href="https://accounts.google.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://www.paypal.com" />
+        <link rel="preconnect" href="https://www.paypal.com" crossOrigin="anonymous" />
+
+        {/* JSON-LD structured data — inlined for instant SEO */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
