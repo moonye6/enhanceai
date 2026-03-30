@@ -104,6 +104,10 @@ export default function Home() {
       .then(data => {
         setUser(data.user || null)
         setIsPro(data.isPro || false)
+        // Use server's authoritative remaining value
+        if (typeof data.remaining === 'number') {
+          setRateLimit(syncFromServer(data.remaining, data.isPro || false))
+        }
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -123,12 +127,6 @@ export default function Home() {
       }
     }
   }, [loading, user, searchParams])
-
-  // Check rate limit
-  useEffect(() => {
-    const limit = checkRateLimit(isPro)
-    setRateLimit(limit)
-  }, [isPro])
 
   // PayPal callback
   useEffect(() => {

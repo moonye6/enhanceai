@@ -10,11 +10,15 @@ interface ProRecord {
   expiresAt: string | null;
 }
 
+function getCurrentMonth(): string {
+  return new Date().toISOString().slice(0, 7)
+}
+
 export async function GET(request: NextRequest) {
   const sessionId = request.cookies.get('session_id')?.value
 
   if (!sessionId) {
-    return NextResponse.json({ user: null, isPro: false })
+    return NextResponse.json({ user: null, isPro: false, remaining: 3 })
   }
 
   try {
@@ -23,12 +27,12 @@ export async function GET(request: NextRequest) {
     const kv = (env as Record<string, KVStore>)['ENHANCEAI_KV']
 
     if (!kv) {
-      return NextResponse.json({ user: null, isPro: false })
+      return NextResponse.json({ user: null, isPro: false, remaining: 3 })
     }
 
     const sessionStr = await kv.get(`session:${sessionId}`)
     if (!sessionStr) {
-      return NextResponse.json({ user: null, isPro: false })
+      return NextResponse.json({ user: null, isPro: false, remaining: 3 })
     }
 
     const session = JSON.parse(sessionStr) as AuthSession
@@ -46,11 +50,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Get real usage from server (authoritative)
+    let remaining = isPro ? 100 : 3
+    if (userId) {
+      const usageKey = isPro 
+        ? `usage:${userId}:${getCurrentMonth()}` 
+        : `usage:${userId}`
+      
+      const usageStr = await kv.get(usageKey)
+      const usage = usageStr ? parseInt(usageStr, 10) : 0
+      const limit = isPro ? 100 : 3
+      remaining = Math.max(0, limit - usage)
+    }
+
     return NextResponse.json({ 
       user: session.user,
       isPro,
+      remaining,
     })
   } catch {
-    return NextResponse.json({ user: null, isPro: false })
+    return NextResponse.json({ user: null, isPro: false, remaining: 3 })
   }
 }
