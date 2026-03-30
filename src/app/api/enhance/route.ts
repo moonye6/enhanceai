@@ -3,12 +3,17 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 
 import type { KVStore } from '@/lib/proStatus';
-import { arrayBufferToBase64, MAX_PREVIEW_BYTES } from '@/lib/image-utils';
+import { arrayBufferToBase64, compressToJpeg, MAX_PREVIEW_DIM } from '@/lib/image-utils';
 
 // AuraSR Queue API endpoints (async mode to avoid timeout)
 const FAL_AI_QUEUE_SUBMIT = 'https://queue.fal.run/fal-ai/aura-sr/requests';
 const FREE_TIER_LIMIT = 3;
 const PRO_TIER_LIMIT = 100;
+
+// Speed optimization: reduce upscale factor and disable overlapping tiles
+const UPSCALE_FACTOR = 2;  // Default is 4, but 2 is much faster and still good quality
+const USE_OVERLAPPING_TILES = false;  // Disabling speeds up processing by ~50%
+const MAX_INPUT_DIMENSION = 1024;  // Max input dimension to speed up processing
 
 interface ProRecord {
   plan: 'monthly' | 'lifetime';
@@ -92,9 +97,37 @@ export async function POST(request: NextRequest) {
       console.warn('[enhance] getRequestContext not available');
     }
 
+    // Read image and compress if too large
     const arrayBuffer = await image.arrayBuffer();
-    const base64 = arrayBufferToBase64(arrayBuffer);
-    const dataUrl = `data:${image.type};base64,${base64}`;
+    
+    // Pre-compress input image if too large (speed optimization)
+    let dataUrl: string;
+    let contentType = image.type;
+    
+    try {
+      const sourceBlob = new Blob([arrayBuffer], { type: image.type });
+      const bitmap = await createImageBitmap(sourceBlob);
+      
+      // If image is larger than MAX_INPUT_DIMENSION, pre-compress it
+      if (bitmap.width > MAX_INPUT_DIMENSION || bitmap.height > MAX_INPUT_DIMENSION) {
+        console.log(`[enhance] Pre-compressing large input: ${bitmap.width}x${bitmap.height}`);
+        const { blob, width, height } = await compressToJpeg(arrayBuffer, image.type, 500 * 1024);
+        const compressedBuffer = await blob.arrayBuffer();
+        const base64 = arrayBufferToBase64(compressedBuffer);
+        dataUrl = `data:image/jpeg;base64,${base64}`;
+        contentType = 'image/jpeg';
+        console.log(`[enhance] Compressed to ${width}x${height}, ${blob.size} bytes`);
+      } else {
+        const base64 = arrayBufferToBase64(arrayBuffer);
+        dataUrl = `data:${image.type};base64,${base64}`;
+      }
+      bitmap.close();
+    } catch (compressErr) {
+      // Fallback to original if compression fails
+      console.warn('[enhance] Pre-compression failed, using original:', compressErr);
+      const base64 = arrayBufferToBase64(arrayBuffer);
+      dataUrl = `data:${image.type};base64,${base64}`;
+    }
 
     // Demo mode - return immediately with demo result
     if (isDemoMode) {
@@ -111,7 +144,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Submit to fal.ai queue (async mode)
+    // Submit to fal.ai queue (async mode) with Optimized Parameters
     const response = await fetch(FAL_AI_QUEUE_SUBMIT, {
       method: 'POST',
       headers: {
@@ -120,7 +153,9 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         image_url: dataUrl,
-        checkpoint_version: 'v2',
+        upscale_factor: UPSCALE_FACTOR,  // 2x instead of default 4x for faster processing
+        overlapping_tiles: USE_OVERLAPPING_TILES,  // false for speed
+        checkpoint: 'v2',  // Use latest checkpoint
       }),
     });
 
@@ -192,6 +227,11 @@ export async function GET() {
     status: 'ok',
     hasApiKey: !!process.env.FAL_AI_API_KEY,
     demoMode: !process.env.FAL_AI_API_KEY,
-    version: '5.0.0-async',
+    version: '5.1.0-async-fast',
+    config: {
+      upscaleFactor: UPSCALE_FACTOR,
+      overlappingTiles: USE_OVERLAPPING_TILES,
+      maxInputDimension: MAX_INPUT_DIMENSION,
+    },
   });
 }
