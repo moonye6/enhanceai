@@ -103,6 +103,7 @@ export default function Home() {
       .then(res => res.json())
       .then(data => {
         setUser(data.user || null)
+        setIsPro(data.isPro || false)
         setLoading(false)
       })
       .catch(() => setLoading(false))
