@@ -7,8 +7,8 @@ import { arrayBufferToBase64, compressToJpeg, MAX_PREVIEW_DIM } from '@/lib/imag
 
 // AuraSR Queue API endpoints (async mode to avoid timeout)
 const FAL_AI_QUEUE_SUBMIT = 'https://queue.fal.run/fal-ai/aura-sr/requests';
-const FREE_TIER_LIMIT = 3;
-const PRO_TIER_LIMIT = 100;
+const FREE_TIER_TOTAL_LIMIT = 3;  // 免费用户总共 3 次（不重置）
+const PRO_TIER_MONTHLY_LIMIT = 100;  // Pro 用户每月 100 次
 
 // Speed optimization: reduce upscale factor and disable overlapping tiles
 const UPSCALE_FACTOR = 2;  // Default is 4, but 2 is much faster and still good quality
@@ -23,6 +23,13 @@ interface ProRecord {
 interface FalQueueSubmitResponse {
   request_id: string;
   status: string;
+}
+
+/**
+ * Get current month in YYYY-MM format for Pro users
+ */
+function getCurrentMonth(): string {
+  return new Date().toISOString().slice(0, 7);
 }
 
 export async function POST(request: NextRequest) {
@@ -59,7 +66,7 @@ export async function POST(request: NextRequest) {
     // Get KV and check rate limit
     let kv: KVStore | null = null;
     let isPro = false;
-    let remaining = FREE_TIER_LIMIT;
+    let remaining = FREE_TIER_TOTAL_LIMIT;
 
     try {
       const { getRequestContext } = await import('@cloudflare/next-on-pages');
@@ -76,20 +83,25 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Check daily usage
-        const today = new Date().toISOString().split('T')[0];
-        const rateLimitKey = `ratelimit:${userId}:${today}`;
-        const usageStr = await kv.get(rateLimitKey);
+        // Check usage based on user type
+        // Free users: total usage (never resets)
+        // Pro users: monthly usage (resets each month)
+        const usageKey = isPro 
+          ? `usage:${userId}:${getCurrentMonth()}`  // Pro: monthly
+          : `usage:${userId}`;  // Free: total forever
+        
+        const usageStr = await kv.get(usageKey);
         const usage = usageStr ? parseInt(usageStr, 10) : 0;
-        const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
+        const limit = isPro ? PRO_TIER_MONTHLY_LIMIT : FREE_TIER_TOTAL_LIMIT;
         remaining = Math.max(0, limit - usage);
 
         if (usage >= limit) {
           return NextResponse.json({
-            error: 'Daily limit exceeded',
+            error: isPro ? 'Monthly limit exceeded' : 'Free trial limit exceeded. Upgrade to Pro for more.',
             code: 'RATE_LIMIT_EXCEEDED',
             remaining: 0,
             isPro,
+            limit,
           }, { status: 429 });
         }
       }
@@ -197,12 +209,19 @@ export async function POST(request: NextRequest) {
 
     // Increment usage immediately (to prevent abuse)
     if (kv && userId) {
-      const today = new Date().toISOString().split('T')[0];
-      const rateLimitKey = `ratelimit:${userId}:${today}`;
-      const usageStr = await kv.get(rateLimitKey);
+      const usageKey = isPro 
+        ? `usage:${userId}:${getCurrentMonth()}` 
+        : `usage:${userId}`;
+      
+      const usageStr = await kv.get(usageKey);
       const usage = usageStr ? parseInt(usageStr, 10) : 0;
-      await kv.put(rateLimitKey, String(usage + 1), { expirationTtl: 86400 });
-      remaining = Math.max(0, (isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT) - usage - 1);
+      
+      // Set TTL: Pro users = 35 days, Free users = no expiry (permanent)
+      const ttl = isPro ? 35 * 24 * 3600 : undefined;
+      await kv.put(usageKey, String(usage + 1), ttl ? { expirationTtl: ttl } : undefined);
+      
+      const limit = isPro ? PRO_TIER_MONTHLY_LIMIT : FREE_TIER_TOTAL_LIMIT;
+      remaining = Math.max(0, limit - usage - 1);
     }
 
     // Return request_id for client polling
@@ -227,7 +246,11 @@ export async function GET() {
     status: 'ok',
     hasApiKey: !!process.env.FAL_AI_API_KEY,
     demoMode: !process.env.FAL_AI_API_KEY,
-    version: '5.1.0-async-fast',
+    version: '6.0.0-async-total-limit',
+    limits: {
+      free: FREE_TIER_TOTAL_LIMIT,
+      pro: PRO_TIER_MONTHLY_LIMIT,
+    },
     config: {
       upscaleFactor: UPSCALE_FACTOR,
       overlappingTiles: USE_OVERLAPPING_TILES,
