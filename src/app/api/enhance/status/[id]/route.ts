@@ -50,6 +50,14 @@ interface FalImage {
   content_type?: string;
 }
 
+// Result endpoint returns top-level image data (not nested under "result")
+interface FalResultResponse {
+  image?: FalImage;
+  images?: FalImage[];
+  detail?: unknown;
+  [key: string]: unknown;
+}
+
 /**
  * Get current month in YYYY-MM format for Pro users
  */
@@ -159,16 +167,51 @@ export async function GET(
     }
 
     if (statusResult.status === 'COMPLETED') {
-      // The status response includes the result when COMPLETED
-      const falImage = statusResult.result?.image || statusResult.result?.images?.[0];
+      // The /status endpoint does not include the result — fetch from the response_url (result endpoint)
+      let resultData: FalResultResponse | null = statusResult.result
+        ? { image: statusResult.result.image, images: statusResult.result.images }
+        : null;
+
+      if (!resultData?.image && !resultData?.images) {
+        console.log('[status] No result in status response, fetching from result endpoint');
+        const resultUrl = `${FAL_AI_QUEUE_BASE}/${FAL_AI_MODEL_ID}/requests/${requestId}`;
+        const resultResp = await fetch(resultUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Key ${FAL_AI_API_KEY}`,
+          },
+        });
+
+        if (resultResp.ok) {
+          // Result endpoint returns top-level { image: {...}, timings: {...} }
+          resultData = await resultResp.json();
+          console.log('[status] Result endpoint response keys:', Object.keys(resultData ?? {}));
+        } else {
+          const errText = await resultResp.text().catch(() => 'Unknown');
+          console.error('[status] Failed to fetch result:', resultResp.status, errText);
+          // Check if fal.ai returned a validation error in the result
+          try {
+            const errData = JSON.parse(errText);
+            if (errData.detail) {
+              return NextResponse.json({
+                error: 'Enhancement failed: invalid parameters',
+                code: 'ENHANCEMENT_FAILED',
+                details: errData.detail,
+              });
+            }
+          } catch { /* not JSON */ }
+        }
+      }
+
+      const falImage = resultData?.image || resultData?.images?.[0];
       const hdUrl = falImage?.url;
 
       if (!hdUrl) {
-        console.error('[status] No image URL in result:', JSON.stringify(statusResult.result).substring(0, 500));
+        console.error('[status] No image URL in result:', JSON.stringify(resultData ?? null).substring(0, 500));
         return NextResponse.json({
           error: 'No enhanced image URL in response',
           code: 'ENHANCEMENT_FAILED',
-          details: statusResult.result,
+          details: resultData ?? null,
         });
       }
 

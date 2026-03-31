@@ -5,13 +5,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { KVStore } from '@/lib/proStatus';
 import { arrayBufferToBase64, compressToJpeg, MAX_PREVIEW_DIM } from '@/lib/image-utils';
 
-// AuraSR Queue API endpoints (async mode to avoid timeout)
-const FAL_AI_QUEUE_SUBMIT = 'https://queue.fal.run/fal-ai/aura-sr/requests';
+// AuraSR Queue API endpoint (async mode to avoid timeout)
+// NOTE: Must NOT include /requests suffix — that breaks result retrieval
+const FAL_AI_QUEUE_SUBMIT = 'https://queue.fal.run/fal-ai/aura-sr';
 const FREE_TIER_TOTAL_LIMIT = 3;  // 免费用户总共 3 次（不重置）
 const PRO_TIER_MONTHLY_LIMIT = 100;  // Pro 用户每月 100 次
 
-// Speed optimization: reduce upscale factor and disable overlapping tiles
-const UPSCALE_FACTOR = 2;  // Default is 4, but 2 is much faster and still good quality
+// Speed optimization: disable overlapping tiles
+const UPSCALE_FACTOR = 4;  // aura-sr only supports upscale_factor=4
 const USE_OVERLAPPING_TILES = false;  // Disabling speeds up processing by ~50%
 const MAX_INPUT_DIMENSION = 1024;  // Max input dimension to speed up processing
 
