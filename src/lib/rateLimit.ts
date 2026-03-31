@@ -4,9 +4,9 @@
  * ⚠️ 重要：客户端限流不可信，实际限流由服务端 (API /api/enhance) 通过 KV 实现。
  * 此模块仅作为 UI 提示，帮助用户了解大致的剩余次数。
  * 服务端返回的 remaining 值会覆盖客户端计数。
- *
- * 📝 限流策略：免费用户总共 3 次，Pro 用户每月 100 次
  */
+
+import { FREE_TIER_LIMIT, PRO_TIER_LIMIT } from '@/lib/fal-config';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -14,9 +14,6 @@ export interface RateLimitResult {
   total: number;
   resetAt: string;  // 免费用户为空，Pro 用户为下月重置时间
 }
-
-const FREE_TIER_TOTAL_LIMIT = 3;  // 免费用户总共 3 次（不重置）
-const PRO_TIER_MONTHLY_LIMIT = 100;  // Pro 用户每月 100 次
 const STORAGE_KEY = 'enhanceai_usage';
 
 interface UsageData {
@@ -61,7 +58,7 @@ function getUsage(isPro = false): UsageData {
  * 查询客户端缓存的限流状态（仅用于 UI 展示）
  */
 export function checkRateLimit(isPro = false): RateLimitResult {
-  const limit = isPro ? PRO_TIER_MONTHLY_LIMIT : FREE_TIER_TOTAL_LIMIT;
+  const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
   const usage = getUsage(isPro);
   const remaining = Math.max(0, limit - usage.count);
 
@@ -78,11 +75,11 @@ export function checkRateLimit(isPro = false): RateLimitResult {
  */
 export function incrementUsage(isPro = false): RateLimitResult {
   if (typeof window === 'undefined') {
-    const limit = isPro ? PRO_TIER_MONTHLY_LIMIT : FREE_TIER_TOTAL_LIMIT;
+    const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
     return { allowed: true, remaining: limit, total: limit, resetAt: '' };
   }
 
-  const limit = isPro ? PRO_TIER_MONTHLY_LIMIT : FREE_TIER_TOTAL_LIMIT;
+  const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
   const usage = getUsage(isPro);
   usage.count += 1;
 
@@ -108,11 +105,11 @@ export function incrementUsage(isPro = false): RateLimitResult {
  */
 export function syncFromServer(serverRemaining: number, isPro = false): RateLimitResult {
   if (typeof window === 'undefined') {
-    const limit = isPro ? PRO_TIER_MONTHLY_LIMIT : FREE_TIER_TOTAL_LIMIT;
+    const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
     return { allowed: true, remaining: limit, total: limit, resetAt: '' };
   }
 
-  const limit = isPro ? PRO_TIER_MONTHLY_LIMIT : FREE_TIER_TOTAL_LIMIT;
+  const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
   const count = Math.max(0, limit - serverRemaining);
 
   const usage: UsageData = { count };

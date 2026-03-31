@@ -4,17 +4,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import type { KVStore } from '@/lib/proStatus';
 import { arrayBufferToBase64, compressToJpeg, MAX_PREVIEW_DIM } from '@/lib/image-utils';
-
-// AuraSR Queue API endpoint (async mode to avoid timeout)
-// NOTE: Must NOT include /requests suffix — that breaks result retrieval
-const FAL_AI_QUEUE_SUBMIT = 'https://queue.fal.run/fal-ai/aura-sr';
-const FREE_TIER_TOTAL_LIMIT = 3;  // 免费用户总共 3 次（不重置）
-const PRO_TIER_MONTHLY_LIMIT = 100;  // Pro 用户每月 100 次
-
-// Speed optimization: disable overlapping tiles
-const UPSCALE_FACTOR = 4;  // aura-sr only supports upscale_factor=4
-const USE_OVERLAPPING_TILES = false;  // Disabling speeds up processing by ~50%
-const MAX_INPUT_DIMENSION = 1024;  // Max input dimension to speed up processing
+import {
+  FAL_QUEUE_SUBMIT_URL,
+  FREE_TIER_LIMIT,
+  PRO_TIER_LIMIT,
+  UPSCALE_FACTOR,
+  OVERLAPPING_TILES,
+  MAX_INPUT_DIMENSION,
+} from '@/lib/fal-config';
 
 interface ProRecord {
   plan: 'monthly' | 'lifetime';
@@ -67,7 +64,7 @@ export async function POST(request: NextRequest) {
     // Get KV and check rate limit
     let kv: KVStore | null = null;
     let isPro = false;
-    let remaining = FREE_TIER_TOTAL_LIMIT;
+    let remaining = FREE_TIER_LIMIT;
 
     try {
       const { getRequestContext } = await import('@cloudflare/next-on-pages');
@@ -93,7 +90,7 @@ export async function POST(request: NextRequest) {
         
         const usageStr = await kv.get(usageKey);
         const usage = usageStr ? parseInt(usageStr, 10) : 0;
-        const limit = isPro ? PRO_TIER_MONTHLY_LIMIT : FREE_TIER_TOTAL_LIMIT;
+        const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
         remaining = Math.max(0, limit - usage);
 
         if (usage >= limit) {
@@ -158,7 +155,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Submit to fal.ai queue (async mode) with Optimized Parameters
-    const response = await fetch(FAL_AI_QUEUE_SUBMIT, {
+    const response = await fetch(FAL_QUEUE_SUBMIT_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Key ${FAL_AI_API_KEY}`,
@@ -166,8 +163,8 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         image_url: dataUrl,
-        upscale_factor: UPSCALE_FACTOR,  // 2x instead of default 4x for faster processing
-        overlapping_tiles: USE_OVERLAPPING_TILES,  // false for speed
+        upscale_factor: UPSCALE_FACTOR,
+        overlapping_tiles: OVERLAPPING_TILES,
         checkpoint: 'v2',  // Use latest checkpoint
       }),
     });
@@ -221,7 +218,7 @@ export async function POST(request: NextRequest) {
       const ttl = isPro ? 35 * 24 * 3600 : undefined;
       await kv.put(usageKey, String(usage + 1), ttl ? { expirationTtl: ttl } : undefined);
       
-      const limit = isPro ? PRO_TIER_MONTHLY_LIMIT : FREE_TIER_TOTAL_LIMIT;
+      const limit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
       remaining = Math.max(0, limit - usage - 1);
     }
 
@@ -249,12 +246,12 @@ export async function GET() {
     demoMode: !process.env.FAL_AI_API_KEY,
     version: '6.0.0-async-total-limit',
     limits: {
-      free: FREE_TIER_TOTAL_LIMIT,
-      pro: PRO_TIER_MONTHLY_LIMIT,
+      free: FREE_TIER_LIMIT,
+      pro: PRO_TIER_LIMIT,
     },
     config: {
       upscaleFactor: UPSCALE_FACTOR,
-      overlappingTiles: USE_OVERLAPPING_TILES,
+      overlappingTiles: OVERLAPPING_TILES,
       maxInputDimension: MAX_INPUT_DIMENSION,
     },
   });

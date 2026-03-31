@@ -4,16 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import type { KVStore } from '@/lib/proStatus';
 import { arrayBufferToBase64, compressToJpeg, MAX_PREVIEW_BYTES } from '@/lib/image-utils';
-
-// fal.ai Queue API endpoints for AuraSR
-// Based on fal.ai documentation:
-// - Submit: POST https://queue.fal.run/fal-ai/aura-sr/requests
-// - Status: GET https://queue.fal.run/fal-ai/aura-sr/requests/{request_id}/status  
-// - Result: The status endpoint returns the result when COMPLETED
-const FAL_AI_MODEL_ID = 'fal-ai/aura-sr';
-const FAL_AI_QUEUE_BASE = 'https://queue.fal.run';
-const FREE_TIER_LIMIT = 3;
-const PRO_TIER_LIMIT = 100;
+import {
+  FAL_MODEL_ID,
+  FAL_QUEUE_BASE,
+  FREE_TIER_LIMIT,
+  PRO_TIER_LIMIT,
+} from '@/lib/fal-config';
 
 interface ProRecord {
   plan: 'monthly' | 'lifetime';
@@ -124,7 +120,7 @@ export async function GET(
     }
 
     // Query status endpoint (includes result when COMPLETED)
-    const statusUrl = `${FAL_AI_QUEUE_BASE}/${FAL_AI_MODEL_ID}/requests/${requestId}/status`;
+    const statusUrl = `${FAL_QUEUE_BASE}/${FAL_MODEL_ID}/requests/${requestId}/status`;
     console.log('[status] Checking status:', statusUrl);
     
     const response = await fetch(statusUrl, {
@@ -174,7 +170,7 @@ export async function GET(
 
       if (!resultData?.image && !resultData?.images) {
         console.log('[status] No result in status response, fetching from result endpoint');
-        const resultUrl = `${FAL_AI_QUEUE_BASE}/${FAL_AI_MODEL_ID}/requests/${requestId}`;
+        const resultUrl = `${FAL_QUEUE_BASE}/${FAL_MODEL_ID}/requests/${requestId}`;
         const resultResp = await fetch(resultUrl, {
           method: 'GET',
           headers: {
