@@ -11,6 +11,123 @@ function downloadImage(url: string): void {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
+// Demo before/after images — stored in public/ for reliability
+// Before: original low-res image, After: AI-enhanced 4x version
+const DEMO_BEFORE = '/demo-before.jpg';
+const DEMO_AFTER = '/demo-after.jpg';
+
+/**
+ * Interactive Before/After slider component for the Hero section.
+ * Uses real sample images to showcase AI enhancement quality.
+ */
+function BeforeAfterSlider() {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [sliderPos, setSliderPos] = useState(50) // percentage
+  const [isDragging, setIsDragging] = useState(false)
+  const [imagesLoaded, setImagesLoaded] = useState({ before: false, after: false })
+
+  const updateSlider = useCallback((clientX: number) => {
+    if (!containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const x = clientX - rect.left
+    const pct = Math.max(0, Math.min(100, (x / rect.width) * 100))
+    setSliderPos(pct)
+  }, [])
+
+  useEffect(() => {
+    if (!isDragging) return
+    const handleMove = (e: MouseEvent) => { e.preventDefault(); updateSlider(e.clientX) }
+    const handleTouchMove = (e: TouchEvent) => { updateSlider(e.touches[0].clientX) }
+    const handleUp = () => setIsDragging(false)
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    window.addEventListener('touchmove', handleTouchMove)
+    window.addEventListener('touchend', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleUp)
+    }
+  }, [isDragging, updateSlider])
+
+  const allLoaded = imagesLoaded.before && imagesLoaded.after
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative aspect-[4/3] overflow-hidden rounded-2xl select-none cursor-col-resize bg-dark-100"
+      onMouseDown={(e) => { setIsDragging(true); updateSlider(e.clientX) }}
+      onTouchStart={(e) => { setIsDragging(true); updateSlider(e.touches[0].clientX) }}
+    >
+      {/* Loading state */}
+      {!allLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-dark-100 z-20">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary-400 border-t-transparent mb-3"></div>
+            <p className="text-dark-400 text-sm">Loading demo...</p>
+          </div>
+        </div>
+      )}
+
+      {/* After (enhanced) — full background */}
+      <img
+        src={DEMO_AFTER}
+        alt="Enhanced with AI"
+        className={`absolute inset-0 w-full h-full object-cover ${allLoaded ? '' : 'opacity-0'}`}
+        onLoad={() => setImagesLoaded(prev => ({ ...prev, after: true }))}
+        draggable={false}
+      />
+
+      {/* Before (original) — clipped by slider */}
+      <div
+        className="absolute inset-0 overflow-hidden"
+        style={{ width: `${sliderPos}%` }}
+      >
+        <img
+          src={DEMO_BEFORE}
+          alt="Original low quality"
+          className={`absolute inset-0 w-full h-full object-cover ${allLoaded ? '' : 'opacity-0'}`}
+          style={{ width: containerRef.current ? `${containerRef.current.offsetWidth}px` : '100%', maxWidth: 'none' }}
+          onLoad={() => setImagesLoaded(prev => ({ ...prev, before: true }))}
+          draggable={false}
+        />
+      </div>
+
+      {/* Labels */}
+      {allLoaded && (
+        <>
+          <div className="absolute top-4 left-4 z-10">
+            <span className="px-2.5 py-1 bg-dark-900/70 backdrop-blur-sm text-white text-xs font-medium rounded-md">
+              Before
+            </span>
+          </div>
+          <div className="absolute top-4 right-4 z-10">
+            <span className="px-2.5 py-1 bg-accent/90 backdrop-blur-sm text-white text-xs font-medium rounded-md">
+              Enhanced 4×
+            </span>
+          </div>
+        </>
+      )}
+
+      {/* Slider line + handle */}
+      {allLoaded && (
+        <div
+          className="absolute inset-y-0 z-10"
+          style={{ left: `${sliderPos}%`, transform: 'translateX(-50%)' }}
+        >
+          <div className="absolute inset-y-0 w-0.5 bg-white/90 shadow-lg"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform">
+            <svg className="w-5 h-5 text-dark-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+            </svg>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Tips shown during enhancement
 const ENHANCE_TIPS = [
   'AuraSR AI generates new pixels with realistic detail recovery',
@@ -388,7 +505,7 @@ export default function EnhanceApp() {
       formData.append('image', compressedFile)
       formData.append('userId', user?.id || 'anonymous')
 
-      startProgress(85, 12000, 'AI is enhancing your image...')
+      startProgress(85, 60000, 'AI is enhancing your image...')
 
       const response = await fetch('/api/enhance', {
         method: 'POST',
@@ -413,7 +530,7 @@ export default function EnhanceApp() {
         } else if (data.code === 'KV_UNAVAILABLE') {
           setError('Service temporarily unavailable. Please try again in a moment.')
         } else if (data.code === 'ENHANCEMENT_TIMEOUT') {
-          setError('Enhancement timed out — your image may be too large. Try a smaller image.')
+          setError('Enhancement is taking longer than usual. This can happen with larger images. Please try again — the AI model may need a moment to warm up.')
         } else if (data.code === 'ENHANCEMENT_FAILED') {
           setError(`Enhancement failed: ${errorMsg}. Please try again.`)
         } else {
@@ -425,8 +542,16 @@ export default function EnhanceApp() {
           stopProgress()
           stopTips()
         }, 600)
-        setResult(data.previewUrl || data.enhancedUrl)
-        setHdUrl(data.hdUrl || '')
+        const previewUrl = data.previewUrl || data.enhancedUrl
+        const hdImageUrl = data.hdUrl || ''
+        setResult(previewUrl)
+        setHdUrl(hdImageUrl)
+
+        // Auto-open HD image in a new tab so user can see the full result immediately
+        if (hdImageUrl) {
+          window.open(hdImageUrl, '_blank', 'noopener,noreferrer')
+        }
+
         if (data.demo) {
           setError('Demo mode: AI enhancement is not active. The image shown is the original.')
         }
@@ -570,50 +695,16 @@ export default function EnhanceApp() {
               </div>
             </div>
 
-            {/* Right: Before/After Preview Card */}
+            {/* Right: Before/After Interactive Slider */}
             <div className="animate-fade-in relative">
               <div className="bg-white rounded-2xl shadow-card-hover border border-dark-100 overflow-hidden">
-                {/* Before/After comparison */}
-                <div className="relative aspect-[4/3] bg-dark-50 overflow-hidden">
-                  {/* Before image (placeholder pattern) */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-dark-100 to-dark-200">
-                    <div className="text-center">
-                      <div className="w-24 h-24 mx-auto mb-3 rounded-xl bg-dark-300/30 flex items-center justify-center">
-                        <svg className="w-10 h-10 text-dark-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                        </svg>
-                      </div>
-                      <p className="text-dark-400 text-sm font-medium">Upload an image to see the magic</p>
-                    </div>
-                  </div>
-
-                  {/* Labels */}
-                  <div className="absolute top-4 left-4 z-10">
-                    <span className="px-2.5 py-1 bg-dark-900/70 backdrop-blur-sm text-white text-xs font-medium rounded-md">
-                      Before
-                    </span>
-                  </div>
-                  <div className="absolute top-4 right-4 z-10">
-                    <span className="px-2.5 py-1 bg-accent/90 backdrop-blur-sm text-white text-xs font-medium rounded-md">
-                      Enhanced
-                    </span>
-                  </div>
-
-                  {/* Center divider */}
-                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-white/80 z-10">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-dark-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
+                <BeforeAfterSlider />
               </div>
 
               {/* Floating badge */}
               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-2 bg-white rounded-full shadow-card-hover border border-dark-100 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-accent"></span>
-                <span className="text-dark-600 text-xs font-medium">4× AI Super Resolution</span>
+                <span className="text-dark-600 text-xs font-medium">Drag to compare • Real AI result</span>
               </div>
             </div>
           </div>
@@ -832,6 +923,15 @@ export default function EnhanceApp() {
           {/* Result actions */}
           {result && (
             <div className="flex flex-col items-center gap-3 mt-6 animate-fade-in-up">
+              {/* Auto-opened notification */}
+              {hdUrl && (
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-accent/10 border border-accent/20 rounded-xl mb-1 animate-fade-in">
+                  <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                  </svg>
+                  <span className="text-accent text-sm font-medium">HD image opened in new tab</span>
+                </div>
+              )}
               <div className="flex flex-wrap justify-center gap-3">
                 <button
                   onClick={() => handleDownload(result, 'preview')}
