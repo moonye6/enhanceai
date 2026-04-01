@@ -175,6 +175,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Google Fonts preconnect */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+
         {/* DNS prefetch & preconnect for critical third-party origins */}
         <link rel="dns-prefetch" href="https://accounts.google.com" />
         <link rel="preconnect" href="https://accounts.google.com" crossOrigin="anonymous" />
