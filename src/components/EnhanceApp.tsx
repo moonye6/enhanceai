@@ -94,20 +94,31 @@ interface User {
 }
 
 /**
- * Client-side image compression: resize & compress to stay under maxBytes (default 3MB).
- * Returns a File ready for upload.
+ * Client-side image compression: aggressively resize & compress to stay under maxBytes.
+ *
+ * Target: ≤500KB, longest side ≤1024px.
+ * This is critical because:
+ *   1. fal.ai AuraSR does 4× upscale → 1024px input → 4096px output (perfect quality)
+ *   2. Smaller input = fal.ai processes MUCH faster (seconds vs minutes)
+ *   3. Smaller base64 payload = faster upload to our Edge API
+ *   4. 4× of 1024px = 4096px, which is already excellent for download/print
+ *
+ * The function always compresses (even if file is under maxBytes) to ensure
+ * dimensions are within MAX_DIM, which controls fal.ai output size & speed.
  */
-async function compressImageForUpload(file: File, maxBytes = 3 * 1024 * 1024): Promise<File> {
-  // If already small enough, return as-is
-  if (file.size <= maxBytes) return file;
-
+async function compressImageForUpload(file: File, maxBytes = 500 * 1024): Promise<File> {
   return new Promise((resolve) => {
     const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
     img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
       let { width, height } = img;
 
-      // Scale down to max 2048px longest side to limit fal.ai output size
-      const MAX_DIM = 2048;
+      // Scale down to max 1024px longest side.
+      // After 4× upscale this gives 4096px output — excellent quality.
+      const MAX_DIM = 1024;
       if (width > MAX_DIM || height > MAX_DIM) {
         const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
         width = Math.round(width * ratio);
@@ -120,15 +131,26 @@ async function compressImageForUpload(file: File, maxBytes = 3 * 1024 * 1024): P
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0, width, height);
 
-      // Try progressively lower quality JPEG
-      const qualities = [0.9, 0.8, 0.7, 0.6, 0.5];
+      // If already small enough after resize, check raw size first
+      // (skip quality reduction if resize alone was enough)
+      const qualities = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35, 0.25];
+
       const tryCompress = (qi: number) => {
-        const quality = qualities[qi] ?? 0.4;
+        const quality = qualities[qi] ?? 0.2;
         canvas.toBlob(
           (blob) => {
             if (!blob) { resolve(file); return; }
             if (blob.size <= maxBytes || qi >= qualities.length - 1) {
-              resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }));
+              const compressed = new File(
+                [blob],
+                file.name.replace(/\.\w+$/, '.jpg'),
+                { type: 'image/jpeg' },
+              );
+              console.log(
+                `[compress] ${file.name}: ${(file.size / 1024).toFixed(0)}KB → ${(blob.size / 1024).toFixed(0)}KB, ` +
+                `${img.naturalWidth}×${img.naturalHeight} → ${width}×${height}, q=${quality}`,
+              );
+              resolve(compressed);
             } else {
               tryCompress(qi + 1);
             }
@@ -137,10 +159,23 @@ async function compressImageForUpload(file: File, maxBytes = 3 * 1024 * 1024): P
           quality,
         );
       };
+
+      // If the file is already under maxBytes AND dimensions are within MAX_DIM,
+      // skip compression entirely
+      if (file.size <= maxBytes && img.naturalWidth <= MAX_DIM && img.naturalHeight <= MAX_DIM) {
+        console.log(`[compress] ${file.name}: already small enough (${(file.size / 1024).toFixed(0)}KB, ${img.naturalWidth}×${img.naturalHeight}), skipping`);
+        resolve(file);
+        return;
+      }
+
       tryCompress(0);
     };
-    img.onerror = () => resolve(file);
-    img.src = URL.createObjectURL(file);
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -434,24 +469,24 @@ export default function EnhanceApp() {
     startTips()
 
     try {
-      // Phase 1: Client-side compression (0→15%, ~2s)
-      startProgress(15, 2000, 'Preparing image...')
+      // Phase 1: Client-side compression (0→20%, ~1s)
+      startProgress(20, 1500, 'Compressing image...')
       const compressedFile = await compressImageForUpload(file)
 
       const formData = new FormData()
       formData.append('image', compressedFile)
       formData.append('userId', user?.id || 'anonymous')
 
-      // Phase 2: Uploading + AI processing (15→75%, ~30s — covers the full server round-trip)
-      startProgress(75, 30000, 'AI is enhancing your image...')
+      // Phase 2: Uploading + AI processing (20→85%, ~10s — much faster with smaller input)
+      startProgress(85, 12000, 'AI is enhancing your image...')
 
       const response = await fetch('/api/enhance', {
         method: 'POST',
         body: formData,
       })
 
-      // Response headers received — downloading compressed result
-      startProgress(90, 5000, 'Downloading enhanced image...')
+      // Response headers received — parsing result
+      startProgress(95, 1000, 'Loading result...')
 
       const data = await response.json()
       stopProgress()
