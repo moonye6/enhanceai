@@ -5,71 +5,12 @@ import { useSearchParams } from 'next/navigation';
 import { checkRateLimit, incrementUsage, syncFromServer, RateLimitResult } from '@/lib/rateLimit';
 
 /**
- * Convert a data URL (base64) or any URL to a Blob, then trigger browser download.
- * This works reliably across all modern browsers — unlike <a download> on data: URLs
- * which Chrome and Safari silently ignore.
- *
- * For external URLs (e.g., fal.ai), we try fetch first. If CORS blocks the fetch,
- * we fall back to opening in a new tab (user can right-click → Save As).
+ * Open the image in a new browser tab for downloading.
+ * The user can then right-click → Save As, or the browser may offer a download prompt.
+ * This avoids CORS issues with fal.ai CDN URLs and is the most reliable approach.
  */
-async function downloadImage(url: string, filename: string): Promise<void> {
-  try {
-    let blob: Blob;
-
-    if (url.startsWith('data:')) {
-      // Parse data URL → Blob directly (no network request)
-      const [header, b64Data] = url.split(',');
-      const mimeMatch = header.match(/data:([^;]+)/);
-      const mime = mimeMatch?.[1] || 'image/jpeg';
-      const binary = atob(b64Data);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      blob = new Blob([bytes], { type: mime });
-    } else {
-      // External URL → try fetch as blob (may be blocked by CORS)
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      blob = await resp.blob();
-    }
-
-    // Create temporary blob URL and trigger download via hidden <a>
-    triggerBlobDownload(blob, filename);
-  } catch (err) {
-    console.warn('Download via fetch failed, trying direct link:', err);
-    // Fallback for CORS-blocked external URLs: try <a> with href directly
-    // This works for some CDN URLs that allow cross-origin <a> clicks
-    try {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => document.body.removeChild(a), 1000);
-    } catch {
-      // Final fallback: open in new tab so user can right-click save
-      window.open(url, '_blank');
-    }
-  }
-}
-
-/** Helper: trigger download from a Blob */
-function triggerBlobDownload(blob: Blob, filename: string) {
-  const blobUrl = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = blobUrl;
-  a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    URL.revokeObjectURL(blobUrl);
-    document.body.removeChild(a);
-  }, 1000);
+function downloadImage(url: string): void {
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 // Tips shown during enhancement — rotated every few seconds
@@ -445,14 +386,11 @@ export default function EnhanceApp() {
   const [imageError, setImageError] = useState(false)
   const [showFullPreview, setShowFullPreview] = useState(false)
 
-  const handleDownload = async (url: string, filename: string, type: 'preview' | 'hd') => {
+  const handleDownload = (url: string, type: 'preview' | 'hd') => {
     setDownloading(type)
-    try {
-      await downloadImage(url, filename)
-    } finally {
-      // Small delay so user sees the "downloading" state
-      setTimeout(() => setDownloading(null), 800)
-    }
+    downloadImage(url)
+    // Small delay so user sees the "downloading" state
+    setTimeout(() => setDownloading(null), 800)
   }
 
   const handleEnhance = async () => {
@@ -750,7 +688,7 @@ export default function EnhanceApp() {
             <div className="flex flex-col items-center gap-3">
               <div className="flex justify-center gap-4">
                 <button
-                  onClick={() => handleDownload(result, 'enhanced-preview.jpg', 'preview')}
+                  onClick={() => handleDownload(result, 'preview')}
                   disabled={downloading === 'preview'}
                   className="px-8 py-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-60 flex items-center gap-2"
                 >
@@ -769,7 +707,7 @@ export default function EnhanceApp() {
               </div>
               {hdUrl && (
                 <button
-                  onClick={() => handleDownload(hdUrl, 'enhanced-hd-4x.jpg', 'hd')}
+                  onClick={() => handleDownload(hdUrl, 'hd')}
                   disabled={downloading === 'hd'}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:text-blue-300 hover:bg-blue-600/30 rounded-lg text-sm font-medium transition disabled:opacity-60"
                 >
@@ -900,7 +838,7 @@ export default function EnhanceApp() {
             {/* Bottom bar with download buttons */}
             <div className="flex justify-center gap-3 mt-3">
               <button
-                onClick={() => handleDownload(result, 'enhanced-preview.jpg', 'preview')}
+                onClick={() => handleDownload(result, 'preview')}
                 disabled={downloading === 'preview'}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-60 flex items-center gap-1.5"
               >
@@ -915,7 +853,7 @@ export default function EnhanceApp() {
               </button>
               {hdUrl && (
                 <button
-                  onClick={() => handleDownload(hdUrl, 'enhanced-hd-4x.jpg', 'hd')}
+                  onClick={() => handleDownload(hdUrl, 'hd')}
                   disabled={downloading === 'hd'}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-60 flex items-center gap-1.5"
                 >
