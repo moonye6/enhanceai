@@ -522,7 +522,7 @@ export default function EnhanceApp() {
         stopTips()
         const errorMsg = data.error || 'Enhancement failed'
         if (data.code === 'RATE_LIMIT_EXCEEDED') {
-          setError('Daily limit exceeded.')
+          setError('Limit exceeded.')
           setShowUpgradeModal(true)
           if (typeof data.remaining === 'number') {
             setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))
@@ -720,7 +720,7 @@ export default function EnhanceApp() {
               <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-white rounded-full shadow-card border border-dark-100">
                 <div className={`w-2 h-2 rounded-full ${rateLimit.remaining > 0 ? 'bg-accent' : 'bg-red-400'}`}></div>
                 <span className="text-dark-600 text-sm font-medium">
-                  {rateLimit.remaining} enhancement{rateLimit.remaining !== 1 ? 's' : ''} remaining today
+                  {rateLimit.remaining} enhancement{rateLimit.remaining !== 1 ? 's' : ''} remaining
                 </span>
                 {isPro && (
                   <span className="px-2 py-0.5 bg-primary-50 text-primary-600 text-xs font-semibold rounded-full">PRO</span>
@@ -983,8 +983,8 @@ export default function EnhanceApp() {
           {/* Upgrade Banner */}
           {rateLimit && !isPro && rateLimit.remaining === 0 && (
             <div className="mt-8 bg-gradient-to-r from-primary-500 to-primary-600 rounded-2xl p-8 text-center text-white shadow-glow">
-              <h3 className="text-2xl font-bold mb-2">Daily limit reached</h3>
-              <p className="text-primary-100 mb-5">Upgrade to Pro for 100 enhancements per day</p>
+              <h3 className="text-2xl font-bold mb-2">Free limit reached</h3>
+              <p className="text-primary-100 mb-5">Upgrade to Pro for 100 enhancements per month</p>
               <button
                 onClick={() => requireLogin(() => setShowUpgradeModal(true))}
                 className="px-6 py-3 bg-white text-primary-600 rounded-xl font-semibold hover:bg-primary-50 transition-all hover:scale-[1.02]"
@@ -1004,14 +1004,14 @@ export default function EnhanceApp() {
                   </svg>
                 </div>
                 <h3 className="text-xl font-bold text-dark-900 mb-2">Ready to enhance your images?</h3>
-                <p className="text-dark-400 mb-6 text-sm">Sign in with Google to get 3 free enhancements per day</p>
+                <p className="text-dark-400 mb-6 text-sm">Sign in with Google to get 3 free enhancements</p>
                 <button
                   onClick={handleLogin}
                   className="btn-primary px-8 py-3.5 text-base w-full sm:w-auto"
                 >
                   Sign in with Google — It&apos;s Free
                 </button>
-                <p className="text-dark-400 text-xs mt-4">Free: 3/day • Pro: 100/day</p>
+                <p className="text-dark-400 text-xs mt-4">Free: 3 total • Pro: 100/month</p>
               </div>
             </div>
           )}
@@ -1039,7 +1039,7 @@ export default function EnhanceApp() {
                   </svg>
                 </div>
                 <h3 className="text-2xl font-bold text-dark-900 mb-2">Upgrade Successful!</h3>
-                <p className="text-dark-500">You&apos;re now a Pro user with 100 enhancements/day.</p>
+                <p className="text-dark-500">You&apos;re now a Pro user with 100 enhancements/month.</p>
               </div>
             ) : (
               <>
@@ -1054,7 +1054,7 @@ export default function EnhanceApp() {
                 </div>
 
                 <div className="space-y-2.5 mb-6">
-                  {['100 enhancements/day', 'Up to 8x upscaling', 'Batch processing', 'Priority support'].map((f, i) => (
+                  {['100 enhancements/month', 'Up to 8x upscaling', 'Batch processing', 'Priority support'].map((f, i) => (
                     <div key={i} className="flex items-center gap-3 text-dark-600">
                       <div className="w-5 h-5 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
                         <svg className="w-3 h-3 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>

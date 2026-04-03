@@ -101,13 +101,13 @@ export default function RootLayout({
         "@type": "Offer",
         price: "0",
         priceCurrency: "USD",
-        description: "Free plan — 3 enhancements per day",
+        description: "Free plan — 3 enhancements total",
       },
       {
         "@type": "Offer",
         price: "4.90",
         priceCurrency: "USD",
-        description: "Pro Monthly — 100 enhancements per day",
+        description: "Pro Monthly — 100 enhancements per month",
       },
       {
         "@type": "Offer",
@@ -142,7 +142,7 @@ export default function RootLayout({
         name: "How much does EnhanceAI cost?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "EnhanceAI offers 3 free enhancements per day. For heavy users, our Pro plan starts at $4.9/month with 100 enhancements per day and up to 8× upscaling.",
+          text: "EnhanceAI offers 3 free enhancements total. For heavy users, our Pro plan starts at $4.9/month with 100 enhancements per month and up to 8× upscaling.",
         },
       },
       {

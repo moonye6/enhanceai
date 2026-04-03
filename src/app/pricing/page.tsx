@@ -5,14 +5,14 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'Pricing — Free & Pro Plans',
   description:
-    'Choose the right EnhanceAI plan. Start free with 3 AI image enhancements per day, or upgrade to Pro for 100/day with 8× upscaling and batch processing.',
+    'Choose the right EnhanceAI plan. Start free with 3 AI image enhancements, or upgrade to Pro for 100/month with 8× upscaling and batch processing.',
   alternates: {
     canonical: '/pricing',
   },
   openGraph: {
     title: 'EnhanceAI Pricing — Free & Pro Plans',
     description:
-      'Start free with 3 AI image enhancements per day, or upgrade to Pro for 100/day.',
+      'Start free with 3 AI image enhancements, or upgrade to Pro for 100/month.',
   },
 }
 
@@ -41,7 +41,7 @@ export default function PricingPage() {
           <h2 className="text-2xl font-bold text-white mb-2">Free</h2>
           <p className="text-4xl font-bold text-white mb-6">$0<span className="text-lg text-slate-400">/mo</span></p>
           <ul className="text-slate-300 space-y-3 mb-8">
-            <li>✓ 3 enhancements/day</li>
+            <li>✓ 3 enhancements total</li>
             <li>✓ 2x upscaling</li>
             <li>✗ No batch processing</li>
           </ul>
@@ -54,7 +54,7 @@ export default function PricingPage() {
           <h2 className="text-2xl font-bold text-white mb-2">Pro Monthly</h2>
           <p className="text-4xl font-bold text-white mb-6">$4.9<span className="text-lg text-slate-400">/mo</span></p>
           <ul className="text-slate-300 space-y-3 mb-8">
-            <li>✓ 100 enhancements/day</li>
+            <li>✓ 100 enhancements/month</li>
             <li>✓ 8x upscaling</li>
             <li>✓ Batch processing</li>
             <li>✓ Priority support</li>
@@ -67,7 +67,7 @@ export default function PricingPage() {
           <h2 className="text-2xl font-bold text-white mb-2">Pro Lifetime</h2>
           <p className="text-4xl font-bold text-white mb-6">$49<span className="text-lg text-slate-400"> once</span></p>
           <ul className="text-slate-300 space-y-3 mb-8">
-            <li>✓ 100 enhancements/day</li>
+            <li>✓ 100 enhancements/month</li>
             <li>✓ 8x upscaling</li>
             <li>✓ Batch processing</li>
             <li>✓ Priority support</li>
