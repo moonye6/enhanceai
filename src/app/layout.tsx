@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.enhanceai.online";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://enhanceai.online";
 
 export const viewport: Viewport = {
   width: "device-width",
