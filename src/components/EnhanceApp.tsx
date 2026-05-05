@@ -235,6 +235,8 @@ export default function EnhanceApp() {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const popupRef = useRef<Window | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef<number>(0);
+  const MAX_POLL_COUNT = 60; // 2 minutes with 2-second interval
   const [dragActive, setDragActive] = useState(false);
 
   // Check auth status on mount
@@ -484,6 +486,74 @@ export default function EnhanceApp() {
     setTimeout(() => setDownloading(null), 800)
   }
 
+  interface EnhanceResultData {
+    previewUrl?: string
+    enhancedUrl?: string
+    hdUrl?: string
+    remaining?: number
+    isPro?: boolean
+    demo?: boolean
+  }
+
+  const finalizeResult = (data: EnhanceResultData, autoOpenHd: boolean) => {
+    startProgress(100, 500, 'Complete!')
+    setTimeout(() => {
+      stopProgress()
+      stopTips()
+    }, 600)
+    const previewUrl = data.previewUrl || data.enhancedUrl || ''
+    const hdImageUrl = data.hdUrl || ''
+    setResult(previewUrl)
+    setHdUrl(hdImageUrl)
+
+    if (autoOpenHd && hdImageUrl) {
+      window.open(hdImageUrl, '_blank', 'noopener,noreferrer')
+    }
+
+    if (data.demo) {
+      setError('Demo mode: AI enhancement is not active. The image shown is the original.')
+    }
+    if (typeof data.remaining === 'number') {
+      setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))
+    } else {
+      const newLimit = incrementUsage(isPro)
+      setRateLimit(newLimit)
+    }
+    if (data.isPro) setIsPro(true)
+  }
+
+  const pollStatus = async (requestId: string): Promise<void> => {
+    const response = await fetch(`/api/enhance/status/${requestId}`)
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Status check failed')
+    }
+
+    if (data.status === 'completed') {
+      // Skip auto-open: popup blockers fire after async wait
+      finalizeResult(data, false)
+      return
+    }
+
+    if (data.status === 'failed') {
+      throw new Error(data.error || 'Enhancement failed')
+    }
+
+    pollCountRef.current++
+    const elapsedSeconds = pollCountRef.current * 2
+    const targetProgress = Math.min(85, 20 + (pollCountRef.current / MAX_POLL_COUNT) * 65)
+    updateProgress(Math.round(targetProgress))
+    setProgressStage(`AI is enhancing your image... (${elapsedSeconds}s)`)
+
+    if (pollCountRef.current >= MAX_POLL_COUNT) {
+      throw new Error('Enhancement timed out — your image may be too large. Try a smaller image.')
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    return pollStatus(requestId)
+  }
+
   const handleEnhance = async () => {
     if (!file) return
 
@@ -496,28 +566,27 @@ export default function EnhanceApp() {
     setImageError(false)
     setShowFullPreview(false)
     startTips()
+    pollCountRef.current = 0
 
     try {
-      startProgress(20, 1500, 'Compressing image...')
+      startProgress(15, 1500, 'Compressing image...')
       const compressedFile = await compressImageForUpload(file)
 
       const formData = new FormData()
       formData.append('image', compressedFile)
       formData.append('userId', user?.id || 'anonymous')
 
-      startProgress(85, 60000, 'AI is enhancing your image...')
+      startProgress(20, 3000, 'Submitting to AI queue...')
 
       const response = await fetch('/api/enhance', {
         method: 'POST',
         body: formData,
       })
 
-      startProgress(95, 1000, 'Loading result...')
-
       const data = await response.json()
-      stopProgress()
 
       if (!response.ok) {
+        stopProgress()
         updateProgress(0)
         stopTips()
         const errorMsg = data.error || 'Enhancement failed'
@@ -536,38 +605,39 @@ export default function EnhanceApp() {
         } else {
           setError(errorMsg)
         }
-      } else {
-        startProgress(100, 500, 'Complete!')
-        setTimeout(() => {
-          stopProgress()
-          stopTips()
-        }, 600)
-        const previewUrl = data.previewUrl || data.enhancedUrl
-        const hdImageUrl = data.hdUrl || ''
-        setResult(previewUrl)
-        setHdUrl(hdImageUrl)
-
-        // Auto-open HD image in a new tab so user can see the full result immediately
-        if (hdImageUrl) {
-          window.open(hdImageUrl, '_blank', 'noopener,noreferrer')
-        }
-
-        if (data.demo) {
-          setError('Demo mode: AI enhancement is not active. The image shown is the original.')
-        }
-        if (typeof data.remaining === 'number') {
-          setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))
-        } else {
-          const newLimit = incrementUsage(isPro)
-          setRateLimit(newLimit)
-        }
-        if (data.isPro) setIsPro(true)
+        return
       }
-    } catch {
+
+      // Update rate limit from initial submit response
+      if (typeof data.remaining === 'number') {
+        setRateLimit(syncFromServer(data.remaining, data.isPro ?? isPro))
+      }
+      if (data.isPro) setIsPro(true)
+
+      // Demo mode or sync completion: finalize immediately
+      if (data.status === 'completed' || data.demo) {
+        finalizeResult(data, true)
+        return
+      }
+
+      // Async mode: poll status endpoint until completion
+      if (data.requestId && data.status === 'processing') {
+        updateProgress(20)
+        setProgressStage('AI is enhancing your image...')
+        await pollStatus(data.requestId)
+        return
+      }
+
+      // Unexpected response shape
       stopProgress()
       stopTips()
       updateProgress(0)
-      setError('Network error, please try again')
+      setError('Unexpected server response')
+    } catch (err) {
+      stopProgress()
+      stopTips()
+      updateProgress(0)
+      setError(err instanceof Error ? err.message : 'Network error, please try again')
     } finally {
       setEnhancing(false)
     }
