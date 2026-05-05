@@ -20,15 +20,17 @@ preview_id = "5ed6b334a7fd4da09883db6a120b3dd0"
 # Setup checklist (Cloudflare Dashboard):
 # 1. R2 → bucket "forenhance" already created
 # 2. bucket → Settings → Object lifecycle rules → "Delete after 30 days"
-# 3. bucket → Settings → Public access → R2.dev subdomain → Allow Access → copy pub-*.r2.dev URL
-# 4. CF Pages project → Settings → Functions → R2 bucket bindings → ENHANCEAI_R2 → forenhance
-# 5. CF Pages project → Settings → Environment variables → R2_PUBLIC_URL = <pub-*.r2.dev URL>
+# 3. bucket → Settings → Public access → R2.dev subdomain → Allow Access (already done)
+# 4. binding + R2_PUBLIC_URL are managed below — Pages dashboard UI is locked
+#    because wrangler.toml is the source of truth (this is correct, not a bug)
 [[r2_buckets]]
 binding = "ENHANCEAI_R2"
 bucket_name = "forenhance"
 preview_bucket_name = "forenhance"
 
-# Environment variables (set these in Cloudflare Dashboard)
-# [vars]
-# FAL_AI_API_KEY = ""
-# R2_PUBLIC_URL = "https://pub-xxxxxxxxxxxxx.r2.dev"
+# Environment variables
+# Public, non-secret values go here (kept in git for reproducibility).
+# Secrets like FAL_AI_API_KEY must NOT be here — set them with:
+#   npx wrangler pages secret put FAL_AI_API_KEY --project-name enhanceai
+[vars]
+R2_PUBLIC_URL = "https://pub-589c968a2e7d4ab6830b55de2e956e62.r2.dev"
