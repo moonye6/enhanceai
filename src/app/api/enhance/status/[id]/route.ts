@@ -3,7 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 
 import type { KVStore } from '@/lib/proStatus';
-import { arrayBufferToBase64, compressToJpeg, MAX_PREVIEW_BYTES } from '@/lib/image-utils';
+import { arrayBufferToBase64, MAX_PREVIEW_BYTES } from '@/lib/image-utils';
 import { uploadHdImage, type R2Bucket } from '@/lib/r2';
 import {
   FAL_MODEL_ID,
@@ -215,36 +215,36 @@ export async function GET(
         });
       }
 
-      // Download the enhanced image once — used for both preview compression and R2 persistence
-      let previewDataUrl = hdUrl;
+      // Download HD bytes once → upload to R2 + decide preview strategy.
+      // We don't compress here: OffscreenCanvas isn't available in CF Workers,
+      // and R2 already gives us a permanent CDN URL for any size.
       let persistedHdUrl: string | null = null;
+      let inlinePreview: string | null = null;
       try {
         const imgResp = await fetch(hdUrl);
         if (imgResp.ok) {
           const imgBuffer = await imgResp.arrayBuffer();
           const imgContentType = imgResp.headers.get('content-type') || 'image/png';
 
-          // Persist HD bytes to R2 (returns null if R2 not configured or upload fails)
           if (userId) {
             persistedHdUrl = await uploadHdImage(r2, r2PublicUrl, imgBuffer, imgContentType, userId);
           }
 
+          // Inline only when small enough — keeps JSON responses lean while
+          // still getting instant render for tiny outputs.
           if (imgBuffer.byteLength <= MAX_PREVIEW_BYTES) {
             const b64 = arrayBufferToBase64(imgBuffer);
-            previewDataUrl = `data:${imgContentType};base64,${b64}`;
-          } else {
-            const { blob } = await compressToJpeg(imgBuffer, imgContentType, MAX_PREVIEW_BYTES);
-            const compressedBuffer = await blob.arrayBuffer();
-            const b64 = arrayBufferToBase64(compressedBuffer);
-            previewDataUrl = `data:image/jpeg;base64,${b64}`;
+            inlinePreview = `data:${imgContentType};base64,${b64}`;
           }
         }
       } catch (downloadErr) {
         console.warn('[status] Failed to proxy image, falling back to direct URL:', downloadErr);
       }
 
-      // The persistent URL the client should use (R2 if available, else fal.ai signed URL)
+      // The permanent URL the client should use for HD download / open-in-tab
       const finalHdUrl = persistedHdUrl ?? hdUrl;
+      // Preview: inline base64 for tiny outputs, otherwise the permanent CDN URL
+      const previewDataUrl = inlinePreview ?? finalHdUrl;
 
       // Save to history (only when we have a permanent URL — fal.ai URLs expire and would be useless)
       if (kv && userId && persistedHdUrl) {
