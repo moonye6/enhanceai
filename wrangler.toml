@@ -17,14 +17,16 @@ id = "b3fb231881954216aeaa66905f7cf820"
 preview_id = "5ed6b334a7fd4da09883db6a120b3dd0"
 
 # R2 Bucket — stores enhanced HD images (30-day retention via bucket lifecycle rule)
-# Dashboard → R2 → Create bucket "enhanceai-hd" → copy bucket name
-# Then Dashboard → bucket → Settings → Object lifecycle rules → "Delete after 30 days"
-# Then Dashboard → bucket → Settings → Public access → enable, copy the pub-*.r2.dev URL
-# Set R2_PUBLIC_URL in env (CF Pages Dashboard → Settings → Environment variables)
+# Setup checklist (Cloudflare Dashboard):
+# 1. R2 → bucket "forenhance" already created
+# 2. bucket → Settings → Object lifecycle rules → "Delete after 30 days"
+# 3. bucket → Settings → Public access → R2.dev subdomain → Allow Access → copy pub-*.r2.dev URL
+# 4. CF Pages project → Settings → Functions → R2 bucket bindings → ENHANCEAI_R2 → forenhance
+# 5. CF Pages project → Settings → Environment variables → R2_PUBLIC_URL = <pub-*.r2.dev URL>
 [[r2_buckets]]
 binding = "ENHANCEAI_R2"
-bucket_name = "enhanceai-hd"
-preview_bucket_name = "enhanceai-hd-preview"
+bucket_name = "forenhance"
+preview_bucket_name = "forenhance"
 
 # Environment variables (set these in Cloudflare Dashboard)
 # [vars]
