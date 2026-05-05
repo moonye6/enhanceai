@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { KVStore } from '@/lib/proStatus';
 
 interface HistoryRecord {
-  originalUrl: string;
   enhancedUrl: string;
   scale: number;
   createdAt: string;

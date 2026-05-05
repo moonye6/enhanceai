@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import type { KVStore } from '@/lib/proStatus';
 import { arrayBufferToBase64, compressToJpeg, MAX_PREVIEW_BYTES } from '@/lib/image-utils';
+import { uploadHdImage, type R2Bucket } from '@/lib/r2';
 import {
   FAL_MODEL_ID,
   FAL_QUEUE_BASE,
@@ -85,16 +86,20 @@ export async function GET(
       });
     }
 
-    // Get task metadata from KV
+    // Get task metadata from KV + R2 binding for HD persistence
     let kv: KVStore | null = null;
+    let r2: R2Bucket | null = null;
+    let r2PublicUrl: string | null = null;
     let userId: string | null = null;
     let isPro = false;
-    let imageDataUrl: string | null = null;
 
     try {
       const { getRequestContext } = await import('@cloudflare/next-on-pages');
       const { env } = getRequestContext();
-      kv = (env as Record<string, KVStore>)['ENHANCEAI_KV'] ?? null;
+      const envRecord = env as Record<string, unknown>;
+      kv = (envRecord['ENHANCEAI_KV'] as KVStore | undefined) ?? null;
+      r2 = (envRecord['ENHANCEAI_R2'] as R2Bucket | undefined) ?? null;
+      r2PublicUrl = (envRecord['R2_PUBLIC_URL'] as string | undefined) ?? null;
 
       if (kv) {
         const taskKey = `task:${requestId}`;
@@ -103,7 +108,6 @@ export async function GET(
           const task = JSON.parse(taskData);
           userId = task.userId;
           isPro = task.isPro;
-          imageDataUrl = task.imageDataUrl;
         }
       }
     } catch {
@@ -211,13 +215,19 @@ export async function GET(
         });
       }
 
-      // Download the enhanced image and compress for preview
+      // Download the enhanced image once — used for both preview compression and R2 persistence
       let previewDataUrl = hdUrl;
+      let persistedHdUrl: string | null = null;
       try {
         const imgResp = await fetch(hdUrl);
         if (imgResp.ok) {
           const imgBuffer = await imgResp.arrayBuffer();
           const imgContentType = imgResp.headers.get('content-type') || 'image/png';
+
+          // Persist HD bytes to R2 (returns null if R2 not configured or upload fails)
+          if (userId) {
+            persistedHdUrl = await uploadHdImage(r2, r2PublicUrl, imgBuffer, imgContentType, userId);
+          }
 
           if (imgBuffer.byteLength <= MAX_PREVIEW_BYTES) {
             const b64 = arrayBufferToBase64(imgBuffer);
@@ -233,17 +243,21 @@ export async function GET(
         console.warn('[status] Failed to proxy image, falling back to direct URL:', downloadErr);
       }
 
-      // Save to history
-      if (kv && userId) {
+      // The persistent URL the client should use (R2 if available, else fal.ai signed URL)
+      const finalHdUrl = persistedHdUrl ?? hdUrl;
+
+      // Save to history (only when we have a permanent URL — fal.ai URLs expire and would be useless)
+      if (kv && userId && persistedHdUrl) {
         const historyKey = `history:${userId}:${Date.now()}`;
         await kv.put(historyKey, JSON.stringify({
-          originalUrl: imageDataUrl ? imageDataUrl.substring(0, 100) + '...' : '(unknown)',
-          enhancedUrl: hdUrl,
+          enhancedUrl: persistedHdUrl,
           scale: 4,
           createdAt: new Date().toISOString(),
         }), { expirationTtl: 30 * 86400 });
+      }
 
-        // Clean up task metadata
+      // Always clean up task metadata
+      if (kv) {
         const taskKey = `task:${requestId}`;
         await kv.delete(taskKey);
       }
@@ -266,7 +280,7 @@ export async function GET(
       return NextResponse.json({
         status: 'completed',
         previewUrl: previewDataUrl,
-        hdUrl: hdUrl,
+        hdUrl: finalHdUrl,
         enhancedUrl: previewDataUrl,
         remaining,
         isPro,

@@ -10,7 +10,6 @@ interface User {
 }
 
 interface HistoryItem {
-  originalUrl: string
   enhancedUrl: string
   scale: number
   createdAt: string

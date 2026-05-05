@@ -223,12 +223,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Store task metadata in KV for later retrieval
+    // NOTE: We deliberately don't persist the source dataUrl — it's a multi-MB base64
+    // string that would consume KV quota for no benefit (the original is already
+    // uploaded to fal.ai, and history only stores the HD result on R2).
     if (kv && userId) {
       const taskKey = `task:${result.request_id}`;
       await kv.put(taskKey, JSON.stringify({
         userId,
         isPro,
-        imageDataUrl: dataUrl,
         createdAt: new Date().toISOString(),
       }), { expirationTtl: 3600 }); // 1 hour TTL
     }
