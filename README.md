@@ -1,4 +1,25 @@
-# EnhanceAI
+# EnhanceAI [DEPRECATED 2026-05-12]
+
+> **Status**: KILLED. Stopped investing new development 2026-05-12.
+>
+> **Why**: After Cloudflare Pages `NEXT_PUBLIC_SITE_URL` ENV fix on 2026-05-05
+> (canonical pointed to `.pages.dev` instead of apex), 14-day GSC observation
+> (5/05 → 5/10 via auto-audit-all-sites.ts v2) showed 0 → 0 imp / 0 → 0 indexed.
+> Niche (AI image upscaler) is red-ocean DA 70+ giants (Adobe / Topaz / Upscayl /
+> Let's Enhance / Bigjpg). 50 PV/day from non-SEO sources will tail off naturally.
+>
+> **Next steps**:
+> 1. Domain `enhanceai.online` set to expire at next renewal cycle (no auto-renew)
+> 2. GSC property removed
+> 3. No new commits unless ressurrection signal arrives
+>
+> **Resurrection signal**: 100+ GSC impressions/month from a non-trivial query
+> (i.e., real organic demand we missed). Default: stay dead.
+>
+> Active CEO plan reference: `~/.gstack/projects/moonye6-seo-skills/ceo-plans/2026-04-26-portfolio-full-execution.md`
+> Memory: `project_seo_portfolio_reduction.md` (updated 2026-05-12 with kill confirmation)
+
+---
 
 一键 AI 图片增强工具
 
