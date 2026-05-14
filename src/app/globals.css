@@ -2,18 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Inter font (variable weight) ─── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* ═══════════════════════════════════════════════════════════════════
+   LEGACY DESIGN (existing pages: /, /pricing, /history)
+   Keep until migrate trigger fires (see TODOS.md P0 GSC checkpoint).
+   ═══════════════════════════════════════════════════════════════════ */
 
 :root {
   --background: #F8FAFC;
   --foreground: #0F172A;
   --primary: #5B5FEF;
   --primary-light: #7173EF;
-  --accent: #22C55E;
+  --legacy-accent: #22C55E;
+
+  /* Aliases for geist package font variables (next/font injects
+     --font-geist-sans / --font-geist-mono on <html>). The brand theme and
+     tailwind config reference these via --font-body / --font-mono. */
+  --font-body: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  /* --font-display is set directly by Fraunces (configured in layout.tsx) */
 }
 
-/* ─── Base ─── */
 body {
   background: var(--background);
   color: var(--foreground);
@@ -22,18 +30,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ─── Smooth scrolling ─── */
 html {
   scroll-behavior: smooth;
 }
 
-/* ─── Selection color ─── */
 ::selection {
   background: rgba(91, 95, 239, 0.15);
   color: #0F172A;
 }
 
-/* ─── Before/After Slider ─── */
+/* Before/After slider — shared between legacy and brand */
 .compare-slider {
   -webkit-appearance: none;
   appearance: none;
@@ -48,7 +54,6 @@ html {
   margin: 0;
   padding: 0;
 }
-
 .compare-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -58,7 +63,6 @@ html {
   cursor: ew-resize;
   box-shadow: 0 0 10px rgba(0,0,0,0.3);
 }
-
 .compare-slider::-moz-range-thumb {
   width: 4px;
   height: 9999px;
@@ -68,7 +72,6 @@ html {
   box-shadow: 0 0 10px rgba(0,0,0,0.3);
 }
 
-/* ─── Subtle gradient mesh background ─── */
 .bg-mesh {
   background-image:
     radial-gradient(at 20% 20%, rgba(91, 95, 239, 0.04) 0px, transparent 50%),
@@ -76,7 +79,6 @@ html {
     radial-gradient(at 50% 50%, rgba(91, 95, 239, 0.02) 0px, transparent 50%);
 }
 
-/* ─── CTA button hover effect ─── */
 .btn-primary {
   @apply bg-primary-500 text-white font-semibold rounded-xl shadow-btn
     transition-all duration-200 ease-out
@@ -92,21 +94,18 @@ html {
     active:scale-[0.98];
 }
 
-/* ─── Card base ─── */
 .card {
   @apply bg-white rounded-2xl p-6 shadow-card border border-dark-100/60
     transition-all duration-300 ease-out
     hover:shadow-card-hover hover:border-dark-200;
 }
 
-/* ─── Progress bar gradient ─── */
 .progress-bar {
   background: linear-gradient(90deg, #5B5FEF, #7173EF, #5B5FEF);
   background-size: 200% 100%;
   animation: shimmer 2s linear infinite;
 }
 
-/* ─── Scrollbar styling ─── */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -121,9 +120,161 @@ html {
   background: #94A3B8;
 }
 
-/* ─── Focus ring ─── */
 *:focus-visible {
   outline: 2px solid #5B5FEF;
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BRAND DESIGN SYSTEM (new SEO pages: /guide, /upscale, /restore,
+   /vs, /tool/image-quality-inspector). See DESIGN.md.
+
+   Opt-in: wrap any page tree with <div className="brand-theme">.
+   Dark mode is the default; pages can override per-section with
+   [data-theme="light"].
+   ═══════════════════════════════════════════════════════════════════ */
+
+.brand-theme {
+  /* Dark mode (default) */
+  --bg: #0E0E10;
+  --bg-elevated: #17171A;
+  --bg-subtle: #1F1F23;
+  --border: #2A2A30;
+  --border-strong: #3A3A42;
+  --text: #F5F5F7;
+  --text-muted: #8A8A95;
+  --text-faint: #5A5A63;
+  --brand: #FF6B35;
+  --brand-hover: #FF8454;
+  --brand-subtle: rgba(255, 107, 53, 0.12);
+  --ok: #5FB58A;
+  --warn: #E7B05C;
+  --err: #E26B6B;
+  --info: #6BA8E2;
+
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body), system-ui, -apple-system, sans-serif;
+  font-feature-settings: "ss01", "tnum";
+}
+
+.brand-theme[data-theme="light"] {
+  --bg: #FAFAF7;
+  --bg-elevated: #FFFFFF;
+  --bg-subtle: #F2F2EC;
+  --border: #E5E5DD;
+  --border-strong: #CFCFC4;
+  --text: #1A1A1F;
+  --text-muted: #5A5A60;
+  --text-faint: #9A9A9F;
+  --brand: #E55A24;
+  --brand-hover: #C84818;
+  --brand-subtle: rgba(229, 90, 36, 0.10);
+  --ok: #3F8F66;
+  --warn: #B07F2F;
+  --err: #B84444;
+  --info: #3F7FB8;
+}
+
+/* Brand typography — serif display, sans body, mono data */
+.brand-theme h1,
+.brand-theme h2,
+.brand-theme h3,
+.brand-theme .display {
+  font-family: var(--font-display), Georgia, "Times New Roman", serif;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+}
+
+.brand-theme code,
+.brand-theme pre,
+.brand-theme .mono,
+.brand-theme [data-mono] {
+  font-family: var(--font-mono), "SF Mono", Menlo, monospace;
+  font-feature-settings: "tnum", "ss01";
+}
+
+.brand-theme ::selection {
+  background: var(--brand-subtle);
+  color: var(--text);
+}
+
+/* Brand component primitives */
+.brand-theme .btn-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 44px;
+  padding: 0 1.5rem;
+  background: var(--brand);
+  color: #0E0E10;
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.brand-theme .btn-brand:hover {
+  background: var(--brand-hover);
+  transform: translateY(-1px);
+}
+.brand-theme .btn-brand:active {
+  transform: scale(0.98);
+}
+.brand-theme .btn-brand:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .brand-theme .btn-brand {
+    height: 48px;
+  }
+}
+
+.brand-theme .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 44px;
+  padding: 0 1.5rem;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-weight: 500;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.brand-theme .btn-ghost:hover {
+  background: var(--bg-subtle);
+  border-color: var(--text-muted);
+}
+
+.brand-theme .surface {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+/* Brand focus ring overrides legacy */
+.brand-theme *:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .brand-theme *,
+  .brand-theme *::before,
+  .brand-theme *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

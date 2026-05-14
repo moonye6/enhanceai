@@ -1,12 +1,24 @@
 import type { Metadata, Viewport } from "next";
+import { Fraunces } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://enhanceai.online";
 
+// Display font — serif, full variable range with opsz axis.
+// See DESIGN.md § Typography.
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  axes: ["opsz"],
+  display: "swap",
+  variable: "--font-display",
+});
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0f172a",
+  themeColor: "#0E0E10", // DESIGN.md dark default
 };
 
 export const metadata: Metadata = {
@@ -173,13 +185,13 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={`${fraunces.variable} ${GeistSans.variable} ${GeistMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
-        {/* Google Fonts preconnect */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-
-        {/* DNS prefetch & preconnect for critical third-party origins */}
+        {/* DNS prefetch for third-party auth/payment origins (next/font handles its own preload) */}
         <link rel="dns-prefetch" href="https://accounts.google.com" />
         <link rel="preconnect" href="https://accounts.google.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://www.paypal.com" />

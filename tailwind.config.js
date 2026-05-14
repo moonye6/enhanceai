@@ -8,6 +8,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // ── LEGACY palette (existing pages: /, /pricing, /history) ──
+        // Keep until migrate trigger fires. See TODOS.md P0 checkpoint.
         primary: {
           50: '#EDEDFD',
           100: '#DCDCFB',
@@ -35,9 +37,38 @@ module.exports = {
           950: '#020617',
         },
         accent: '#22C55E',
+
+        // ── BRAND tokens (new SEO pages, scoped under .brand-theme) ──
+        // CSS variables defined in globals.css. See DESIGN.md.
+        bg: 'var(--bg)',
+        surface: 'var(--bg-elevated)',
+        'surface-subtle': 'var(--bg-subtle)',
+        bborder: 'var(--border)',           // "bborder" avoids collision with the `border` utility
+        'bborder-strong': 'var(--border-strong)',
+        text: 'var(--text)',
+        'text-muted': 'var(--text-muted)',
+        'text-faint': 'var(--text-faint)',
+        brand: 'var(--brand)',
+        'brand-hover': 'var(--brand-hover)',
+        'brand-subtle': 'var(--brand-subtle)',
+        ok: 'var(--ok)',
+        warn: 'var(--warn)',
+        err: 'var(--err)',
+        info: 'var(--info)',
       },
       fontFamily: {
+        // Legacy default (existing pages keep Inter)
         sans: ['Inter', 'SF Pro Display', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Brand fonts (use under .brand-theme, e.g. `font-display`, `font-body`, `font-mono`)
+        display: ['var(--font-display)', 'Georgia', '"Times New Roman"', 'serif'],
+        body: ['var(--font-body)', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['var(--font-mono)', '"SF Mono"', 'Menlo', 'monospace'],
+      },
+      borderRadius: {
+        // Brand hierarchical radius — see DESIGN.md
+        'brand-sm': '6px',
+        'brand-md': '10px',
+        'brand-lg': '16px',
       },
       animation: {
         'fade-in': 'fadeIn 0.6s ease-out',
